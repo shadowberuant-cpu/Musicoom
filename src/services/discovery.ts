@@ -1,7 +1,8 @@
 
 /**
  * Discovery Service
- * Trending music, radio mixes, top artists/tracks by country
+ * Trending music, radio mixes, top artists/tracks by country,
+ * and improved similar-track discovery.
  */
 
 import { YTMusic } from "./ytmusic.ts";
@@ -11,13 +12,172 @@ import {
   getTopTracks as lastfmTopTracks,
 } from "./lastfm.ts";
 
+/**
+ * Normalize titles and artist names so small formatting differences
+ * don't prevent a match.
+ */
+function normalizeMusicText(value: unknown): string {
+  if (typeof value !== "string") return "";
+
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}/g, " ")
+    .replace(
+      /\b(official\s+)?(music\s+)?(video|audio|lyrics?|visualizer|visualiser|hd|hq|4k|topic|remaster(ed)?|live|explicit|clean|mv|lyric video)\b/g,
+      " ",
+    )
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Calculate the proportion of meaningful query words that appear
+ * in the candidate text.
+ */
+function tokenOverlap(query: string, candidate: string): number {
+  const queryTokens = new Set(
+    normalizeMusicText(query)
+      .split(" ")
+      .filter((word) => word.length > 1),
+  );
+
+  const candidateTokens = new Set(
+    normalizeMusicText(candidate)
+      .split(" ")
+      .filter((word) => word.length > 1),
+  );
+
+  if (queryTokens.size === 0 || candidateTokens.size === 0) {
+    return 0;
+  }
+
+  let matches = 0;
+
+  for (const token of queryTokens) {
+    if (candidateTokens.has(token)) matches++;
+  }
+
+  return matches / queryTokens.size;
+}
+
+/**
+ * Read artist names from common YouTube search-result shapes.
+ */
+function getVideoArtistText(video: any): string {
+  const possibleArtists = [
+    video?.artist,
+    video?.author,
+    video?.channelTitle,
+    video?.channelName,
+    video?.artists,
+  ];
+
+  return possibleArtists
+    .map((value: any) => {
+      if (typeof value === "string") return value;
+
+      if (Array.isArray(value)) {
+        return value
+          .map((artist: any) =>
+            typeof artist === "string"
+              ? artist
+              : artist?.name ?? artist?.title ?? ""
+          )
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      if (value && typeof value === "object") {
+        return value.name ?? value.title ?? "";
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * Score a YouTube candidate against the intended similar track.
+ * Higher scores indicate stronger title and artist relevance.
+ */
+function scoreVideoCandidate(
+  video: any,
+  expectedTitle: string,
+  expectedArtist: string,
+): number {
+  if (
+    typeof video?.videoId !== "string" ||
+    !video.videoId.trim() ||
+    typeof video?.title !== "string" ||
+    !video.title.trim()
+  ) {
+    return -1;
+  }
+
+  const title = normalizeMusicText(video.title);
+  const wantedTitle = normalizeMusicText(expectedTitle);
+  const wantedArtist = normalizeMusicText(expectedArtist);
+  const artistText = normalizeMusicText(getVideoArtistText(video));
+
+  if (!title || !wantedTitle || !wantedArtist) return -1;
+
+  let score = 0;
+
+  // Title relevance is the most important signal.
+  if (title === wantedTitle) {
+    score += 10;
+  } else if (title.includes(wantedTitle)) {
+    score += 7;
+  } else if (wantedTitle.includes(title) && title.length > 2) {
+    score += 5;
+  } else {
+    score += tokenOverlap(wantedTitle, title) * 6;
+  }
+
+  // Artist information can appear in the title or channel metadata.
+  if (title.includes(wantedArtist)) {
+    score += 5;
+  } else if (artistText.includes(wantedArtist)) {
+    score += 5;
+  } else {
+    const titleArtistOverlap = tokenOverlap(wantedArtist, title);
+    const metadataArtistOverlap = tokenOverlap(wantedArtist, artistText);
+
+    score += Math.max(titleArtistOverlap, metadataArtistOverlap) * 4;
+  }
+
+  // Small preference for useful music uploads over obvious low-relevance
+  // edits, reaction videos, and unrelated compilations.
+  if (/\b(official|audio|lyrics|lyric video)\b/i.test(video.title)) {
+    score += 0.25;
+  }
+
+  if (
+    /\b(reaction|review|tutorial|karaoke|instrumental|nightcore|slowed|speed up|sped up|mashup|compilation)\b/i.test(
+      video.title,
+    )
+  ) {
+    score -= 2;
+  }
+
+  return score;
+}
+
+/**
+ * Get trending music for a country using YouTube Music search.
+ */
 export async function getTrendingMusic(
   country = "United States",
-  ytmusic?: YTMusic
+  ytmusic?: YTMusic,
 ) {
   try {
     if (ytmusic) {
-      const countryName = country.trim();
+      const countryName = country.trim() || "United States";
 
       const searchQueries = [
         `${countryName} music 2026`,
@@ -80,6 +240,9 @@ export async function getTrendingMusic(
   }
 }
 
+/**
+ * Generate a radio playlist from a seed YouTube video ID.
+ */
 export async function getRadio(videoId: string, ytmusic: YTMusic) {
   try {
     if (!videoId?.trim()) {
@@ -94,7 +257,7 @@ export async function getRadio(videoId: string, ytmusic: YTMusic) {
       undefined,
       true,
       false,
-      50
+      50,
     );
 
     if (data?.tracks && data.tracks.length > 0) {
@@ -119,10 +282,13 @@ export async function getRadio(videoId: string, ytmusic: YTMusic) {
   }
 }
 
+/**
+ * Get artists for a country, with a Last.fm fallback.
+ */
 export async function getTopArtists(
   country?: string,
   limit = 20,
-  ytmusic?: YTMusic
+  ytmusic?: YTMusic,
 ) {
   try {
     const safeLimit = Number.isFinite(Number(limit))
@@ -175,7 +341,7 @@ export async function getTopArtists(
       }
     }
 
-    // Fallback to Last.fm global
+    // Fallback to Last.fm global artists.
     return await lastfmTopArtists(undefined, safeLimit);
   } catch (err) {
     console.error("getTopArtists error:", err);
@@ -187,10 +353,13 @@ export async function getTopArtists(
   }
 }
 
+/**
+ * Get tracks for a country, with a Last.fm fallback.
+ */
 export async function getTopTracks(
   country?: string,
   limit = 20,
-  ytmusic?: YTMusic
+  ytmusic?: YTMusic,
 ) {
   try {
     const safeLimit = Number.isFinite(Number(limit))
@@ -248,7 +417,7 @@ export async function getTopTracks(
       }
     }
 
-    // Fallback to Last.fm global
+    // Fallback to Last.fm global tracks.
     return await lastfmTopTracks(undefined, safeLimit);
   } catch (err) {
     console.error("getTopTracks error:", err);
@@ -260,11 +429,18 @@ export async function getTopTracks(
   }
 }
 
+/**
+ * Find similar tracks through Last.fm, then locate the most relevant
+ * playable YouTube result for each recommendation.
+ *
+ * The result remains an array of YouTube video objects, with the
+ * original Last.fm recommendation attached as `similarTrack`.
+ */
 export async function getSimilarTracks(
   title: string,
   artist: string,
   limit: string | number,
-  youtubeSearch: any
+  youtubeSearch: any,
 ) {
   const cleanTitle = title?.trim();
   const cleanArtist = artist?.trim();
@@ -293,7 +469,7 @@ export async function getSimilarTracks(
     const similar = await LastFM.getSimilarTracks(
       cleanTitle,
       cleanArtist,
-      String(safeLimit)
+      String(safeLimit),
     );
 
     if (!Array.isArray(similar)) {
@@ -305,59 +481,106 @@ export async function getSimilarTracks(
       };
     }
 
-    const tracks = similar.filter(
-      (track: any) =>
-        typeof track?.title === "string" &&
-        track.title.trim() &&
-        typeof track?.artist === "string" &&
-        track.artist.trim()
-    );
+    // Remove malformed tracks and duplicate recommendations.
+    const seenRecommendations = new Set<string>();
 
+    const tracks = similar.filter((track: any) => {
+      if (
+        typeof track?.title !== "string" ||
+        !track.title.trim() ||
+        typeof track?.artist !== "string" ||
+        !track.artist.trim()
+      ) {
+        return false;
+      }
+
+      const key = `${normalizeMusicText(track.title)}::${normalizeMusicText(track.artist)}`;
+
+      if (seenRecommendations.has(key)) return false;
+
+      seenRecommendations.add(key);
+      return true;
+    });
+
+    // Search recommendations concurrently. Each search is evaluated
+    // independently, so one failed search does not break the whole list.
     const results = await Promise.all(
       tracks.slice(0, safeLimit).map(async (track: any) => {
-        try {
-          const trackTitle = track.title.trim();
-          const trackArtist = track.artist.trim();
+        const trackTitle = track.title.trim();
+        const trackArtist = track.artist.trim();
 
-          const response = await youtubeSearch.searchVideos(
-            `${trackTitle} ${trackArtist}`
-          );
+        try {
+          // Quoting the title helps reduce unrelated search results.
+          const query = `"${trackTitle}" "${trackArtist}"`;
+          const response = await youtubeSearch.searchVideos(query);
 
           const videos = Array.isArray(response?.results)
             ? response.results
             : [];
 
-          const video = videos.find(
-            (item: any) =>
-              typeof item?.videoId === "string" &&
-              item.videoId.trim() &&
-              typeof item?.title === "string" &&
-              item.title.trim()
-          );
+          if (videos.length === 0) {
+            return null;
+          }
 
-          if (!video) {
+          const rankedVideos = videos
+            .map((video: any, index: number) => ({
+              video,
+              index,
+              score: scoreVideoCandidate(
+                video,
+                trackTitle,
+                trackArtist,
+              ),
+            }))
+            .filter((candidate: any) => candidate.score >= 0)
+            .sort(
+              (a: any, b: any) =>
+                b.score - a.score || a.index - b.index,
+            );
+
+          const bestMatch = rankedVideos[0];
+
+          // Reject weak matches rather than returning an obviously
+          // unrelated song just to fill the requested limit.
+          if (!bestMatch || bestMatch.score < 5) {
             return null;
           }
 
           return {
-            ...video,
+            ...bestMatch.video,
             similarTrack: {
               title: trackTitle,
               artist: trackArtist,
             },
+            matchScore: Number(bestMatch.score.toFixed(2)),
           };
         } catch (err) {
           console.error(
-            `Similar-track YouTube search failed for "${track.title}":`,
-            err
+            `Similar-track YouTube search failed for "${trackTitle}" by "${trackArtist}":`,
+            err,
           );
 
           return null;
         }
-      })
+      }),
     );
 
-    return results.filter(Boolean);
+    // Remove duplicate YouTube videos and keep the requested result count.
+    const seenVideoIds = new Set<string>();
+    const matchedTracks: any[] = [];
+
+    for (const result of results) {
+      if (!result?.videoId || seenVideoIds.has(result.videoId)) {
+        continue;
+      }
+
+      seenVideoIds.add(result.videoId);
+      matchedTracks.push(result);
+
+      if (matchedTracks.length >= safeLimit) break;
+    }
+
+    return matchedTracks;
   } catch (err) {
     console.error("getSimilarTracks error:", err);
 
