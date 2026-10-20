@@ -53,7 +53,7 @@ return "";
   */
   export async function getTrendingMusic(
   country = "United States",
-  ytmusic?: YTMusic
+  ytmusic?: YTMusic,
   ) {
   try {
   if (ytmusic) {
@@ -96,7 +96,10 @@ return "";
        if (allTracks.length >= 30) break;
      }
    } catch (error) {
-     console.error(`Trending search failed for "${query}":`, error);
+     console.error(
+       `Trending search failed for "${query}":`,
+       error,
+     );
    }
   ```
 
@@ -140,7 +143,7 @@ return "";
   undefined,
   true,
   false,
-  50
+  50,
   );
 
   if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
@@ -172,7 +175,7 @@ return "";
   export async function getTopArtists(
   country?: string,
   limit = 20,
-  ytmusic?: YTMusic
+  ytmusic?: YTMusic,
   ) {
   try {
   const safeLimit = Number.isFinite(Number(limit))
@@ -204,7 +207,9 @@ return "";
        : [];
 
      for (const artist of artists) {
-       if (!artist?.browseId || seenIds.has(artist.browseId)) continue;
+       if (!artist?.browseId || seenIds.has(artist.browseId)) {
+         continue;
+       }
 
        seenIds.add(artist.browseId);
 
@@ -217,7 +222,10 @@ return "";
        if (allArtists.length >= safeLimit) break;
      }
    } catch (error) {
-     console.error(`Artist search failed for "${query}":`, error);
+     console.error(
+       `Artist search failed for "${query}":`,
+       error,
+     );
    }
   ```
 
@@ -250,7 +258,7 @@ return "";
   export async function getTopTracks(
   country?: string,
   limit = 20,
-  ytmusic?: YTMusic
+  ytmusic?: YTMusic,
   ) {
   try {
   const safeLimit = Number.isFinite(Number(limit))
@@ -297,7 +305,10 @@ return "";
        if (allTracks.length >= safeLimit) break;
      }
    } catch (error) {
-     console.error(`Track search failed for "${query}":`, error);
+     console.error(
+       `Track search failed for "${query}":`,
+       error,
+     );
    }
   ```
 
@@ -334,7 +345,7 @@ return "";
   title: string,
   artist: string,
   limit: string | number,
-  youtubeSearch: any
+  youtubeSearch: any,
   ) {
   const cleanTitle = title?.trim();
   const cleanArtist = artist?.trim();
@@ -350,7 +361,7 @@ try {
 lastfmResult = await LastFM.getSimilarTracks(
 cleanTitle,
 cleanArtist,
-String(safeLimit)
+String(safeLimit),
 );
 } catch (error) {
 console.error("Last.fm similar-track lookup failed:", error);
@@ -366,15 +377,14 @@ return {
 if (!Array.isArray(lastfmResult)) {
 console.error(
 "Last.fm returned an invalid similar-tracks response:",
-lastfmResult
+lastfmResult,
 );
 
 ```
 return {
-  error:
-    typeof lastfmResult?.error === "string"
-      ? lastfmResult.error
-      : "Last.fm returned an invalid response",
+  error: typeof lastfmResult?.error === "string"
+    ? lastfmResult.error
+    : "Last.fm returned an invalid response",
 };
 ```
 
@@ -392,15 +402,14 @@ track.artist &&
 !(
 normalizeText(track.title) === normalizeText(cleanTitle) &&
 normalizeText(track.artist) === normalizeText(cleanArtist)
-)
+),
 );
 
 const uniqueTracks: SimilarTrack[] = [];
 const seenTracks = new Set<string>();
 
 for (const track of similarTracks) {
-const key =
-`${normalizeText(track.title)}::${normalizeText(track.artist)}`;
+const key = `${normalizeText(track.title)}::${normalizeText(track.artist)}`;
 
 ```
 if (seenTracks.has(key)) continue;
@@ -421,7 +430,7 @@ let video: any = null;
   if (typeof youtubeSearch?.searchVideos === "function") {
     try {
       const response = await youtubeSearch.searchVideos(
-        `${track.title} ${track.artist}`
+        `${track.title} ${track.artist}`,
       );
 
       const videos = Array.isArray(response?.results)
@@ -431,18 +440,18 @@ let video: any = null;
       video =
         videos.find(
           (item: any) =>
-            typeof item?.id === "string" && item.id.trim()
+            typeof item?.id === "string" && item.id.trim(),
         ) ??
         videos.find(
           (item: any) =>
             typeof item?.videoId === "string" &&
-            item.videoId.trim()
+            item.videoId.trim(),
         ) ??
         null;
     } catch (error) {
       console.error(
         `YouTube lookup failed for "${track.title}":`,
-        error
+        error,
       );
     }
   }
@@ -455,8 +464,7 @@ let video: any = null;
       id: videoId,
       videoId,
       title: video.title || track.title,
-      link:
-        video.link ||
+      link: video.link ||
         `https://www.youtube.com/watch?v=${videoId}`,
       similarTrack: {
         title: track.title,
@@ -478,7 +486,7 @@ let video: any = null;
     },
     source: "lastfm",
   };
-})
+}),
 ```
 
 );
