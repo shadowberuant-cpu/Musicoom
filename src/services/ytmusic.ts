@@ -13,8 +13,7 @@ import {
 export class YTMusic {
   private baseURL = "https://music.youtube.com/youtubei/v1";
 
-  private apiKey = Deno.env.get("YT_MUSIC_API_KEY") ||
-    "AIzaSyC9XL3ZjWjXClIX1FmUxJq--EohcD4_oSs";
+  private apiKey = "AIzaSyC9XL3ZjWjXClIX1FmUxJq--EohcD4_oSs";
 
   private context = {
     client: {
