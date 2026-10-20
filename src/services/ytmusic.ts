@@ -1,4 +1,3 @@
-
 /**
  * YouTube Music API - Core class
  * Handles search, browse, and player requests to YouTube Music's internal API
@@ -662,12 +661,7 @@ export class YTMusic {
     };
   }
 
-
   async getRelated(videoId: string) {
-    if (!/^[\w-]{11}$/.test(videoId)) {
-      return [];
-    }
-
     const url =
       `https://www.youtube.com/youtubei/v1/next?key=${encodeURIComponent(this.apiKey)}`;
 
@@ -686,174 +680,124 @@ export class YTMusic {
     const secondaryResults =
       data?.contents?.twoColumnWatchNextResults?.secondaryResults
         ?.secondaryResults?.results ||
-      data?.contents?.singleColumnWatchNextResultsRenderer
-        ?.secondaryResults?.results ||
       [];
 
-    const results: {
-      videoId: string;
-      title: string;
-      artist: string;
-      thumbnail: string;
-      duration: string;
-    }[] = [];
+    // ── Filter configuration ───────────────────────────────
+    const MIN_DURATION_SECONDS = 30;        // filter previews / intros
+    const MAX_DURATION_SECONDS = 60 * 60;   // filter full albums / dumps
 
-    const seen = new Set<string>();
+    // Compilations, mixes, streams, and transformed versions we don't want.
+    const unwantedTitlePattern =
+      /\b(?:jukebox|mega[\s-]*mix|megamix|non[\s-]*stop|nonstop|mash[\s-]*ups?|medley|compilations?|full[\s-]+album|all[\s-]+songs|greatest[\s-]+hits|top[\s-]+hits|playlist|24[\s\/-]*7|live[\s-]+stream|live[\s-]+radio|hour[\s-]+loop|looped|slowed\s*[+&]\s*reverb|nightcore|8[\s-]*d[\s-]+audio|bass[\s-]*boost(?:ed)?|\d{1,2}[\s-]+hours?)\b/i;
 
-    const compilationPattern =
-      /\b(full album|full movie|jukebox|nonstop|non-stop|mega\s*mix|long mix|music compilation|song collection|complete album|all songs|top \d+ songs|1 hour mix|2 hour mix|3 hour mix|mashup|karaoke compilation|playlist mix)\b/i;
+    const unwantedArtistPattern = /\bvarious\s+artists\b/i;
 
-    const nonMusicPattern =
-      /\b(gameplay|walkthrough|reaction video|daily vlog|prank video|news report|tutorial|unboxing|podcast episode)\b/i;
+    // ── Helpers ────────────────────────────────────────────
+    const parseDuration = (text?: string | null): number => {
+      if (!text) return 0;
+      const trimmed = text.trim();
+      const parts = trimmed.split(":").map((p) => parseInt(p, 10) || 0);
 
-    // YouTube text can be a string, runs, simpleText, or { content: "..." }.
-    const getText = (value: any): string => {
-      if (typeof value === "string") {
-        return value.trim();
-      }
-
-      if (typeof value?.content === "string") {
-        return value.content.trim();
-      }
-
-      if (Array.isArray(value?.runs)) {
-        return value.runs
-          .map((run: any) => run?.text || "")
-          .join("")
-          .trim();
-      }
-
-      if (typeof value?.simpleText === "string") {
-        return value.simpleText.trim();
-      }
-
-      return "";
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      return 0;
     };
 
-    const parseDurationSeconds = (value: string): number => {
-      if (!value) return 0;
-
-      const parts = value.split(":").map(Number);
-
-      if (
-        parts.length < 2 ||
-        parts.length > 3 ||
-        parts.some((part) => !Number.isFinite(part) || part < 0)
-      ) {
-        return 0;
-      }
-
-      return parts.reduce(
-        (total, part) => total * 60 + part,
-        0,
-      );
+    const isAcceptableDuration = (seconds: number): boolean => {
+      // Unknown duration: allow (can't judge).
+      if (seconds <= 0) return true;
+      return seconds >= MIN_DURATION_SECONDS && seconds <= MAX_DURATION_SECONDS;
     };
 
-    const addVideo = (
-      id: string,
+    const isUnwanted = (
       title: string,
-      artist: string,
-      thumbnail: string,
-      duration: string,
-    ) => {
-      const cleanId = id.trim();
-      const cleanTitle = title.trim();
-      const cleanArtist = artist.trim();
+      artist?: string | null,
+    ): boolean =>
+      unwantedTitlePattern.test(title) ||
+      unwantedArtistPattern.test(artist || "");
 
-      if (!/^[\w-]{11}$/.test(cleanId)) return;
-      if (cleanId === videoId || seen.has(cleanId)) return;
-      if (cleanTitle.length < 2) return;
-
-      // Skip obvious compilations and non-music videos.
-      if (compilationPattern.test(cleanTitle)) return;
-      if (nonMusicPattern.test(cleanTitle)) return;
-
-      // Keep the original short-clip filter.
-      const seconds = parseDurationSeconds(duration);
-      if (seconds > 0 && seconds < 60) return;
-
-      seen.add(cleanId);
-
-      results.push({
-        videoId: cleanId,
-        title: cleanTitle,
-        artist: cleanArtist || "Unknown Artist",
-        thumbnail:
-          thumbnail ||
-          `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
-        duration,
-      });
-    };
+    // ── Iterate results ────────────────────────────────────
+    const results: any[] = [];
 
     for (const item of secondaryResults) {
-      const lockup = item?.lockupViewModel;
+      if (item.lockupViewModel) {
+        const lockup = item.lockupViewModel;
+        const metadata = lockup.metadata?.lockupMetadataViewModel;
 
-      if (lockup) {
-        const metadata = lockup?.metadata?.lockupMetadataViewModel;
+        const contentImage = lockup.contentImage
+          ?.collectionThumbnailViewModel?.primaryThumbnail
+          ?.thumbnailViewModel;
 
-        const id =
-          lockup?.rendererContext?.commandContext?.onTap
+        const vid =
+          lockup.rendererContext?.commandContext?.onTap
             ?.innertubeCommand?.watchEndpoint?.videoId ||
-          lockup?.contentId ||
-          "";
+          lockup.contentId;
 
-        // Important: lockup titles often use { content: "..." }.
-        const title = getText(metadata?.title);
+        const title = metadata?.title?.content || "";
 
+        // Flatten every metadata part so we can locate duration reliably.
         const metadataRows =
-          metadata?.metadata?.contentMetadataViewModel?.metadataRows ||
-          [];
-
-        const metadataParts = metadataRows.flatMap(
+          metadata?.metadata?.contentMetadataViewModel?.metadataRows || [];
+        const firstRowParts = metadataRows[0]?.metadataParts || [];
+        const allParts = metadataRows.flatMap(
           (row: any) => row?.metadataParts || [],
         );
 
-        const textParts = metadataParts
-          .map((part: any) => getText(part?.text))
-          .filter(Boolean);
+        const artist = firstRowParts[0]?.text?.content as string | undefined;
 
-        const duration =
-          textParts.find((text: string) =>
-            /^\d{1,2}:\d{2}(:\d{2})?$/.test(text)
-          ) || "";
+        const durationPart = allParts.find((p: any) =>
+          /^\d{1,2}(?::\d{2}){1,2}$/.test((p?.text?.content || "").trim()),
+        );
+        const durationText: string = durationPart?.text?.content || "";
+        const durationSeconds = parseDuration(durationText);
 
-        const artist =
-          textParts.find((text: string) => text !== duration) || "";
+        if (!vid) continue;
+        if (isUnwanted(title, artist)) continue;
+        if (!isAcceptableDuration(durationSeconds)) continue;
 
-        const thumbnail =
-          lockup?.contentImage?.collectionThumbnailViewModel
-            ?.primaryThumbnail?.thumbnailViewModel?.image?.sources
-            ?.slice(-1)?.[0]?.url ||
-          lockup?.contentImage?.thumbnailViewModel?.image?.sources
-            ?.slice(-1)?.[0]?.url ||
+        results.push({
+          videoId: vid,
+          title,
+          artist,
+          thumbnail: contentImage?.image?.sources?.[0]?.url,
+          duration: durationText,
+        });
+      } else if (item.compactVideoRenderer) {
+        const video = item.compactVideoRenderer;
+
+        const title =
+          video.title?.simpleText ||
+          video.title?.runs?.map((r: any) => r.text).join("") ||
           "";
 
-        addVideo(id, title, artist, thumbnail, duration);
-        continue;
+        const artist = video.shortBylineText?.runs?.[0]?.text as
+          | string
+          | undefined;
+
+        const durationText: string = video.lengthText?.simpleText || "";
+        const durationSeconds = parseDuration(durationText);
+
+        // Skip live streams flagged by a "LIVE" badge.
+        const isLive = (video.badges || []).some((b: any) => {
+          const label = b?.metadataBadgeRenderer?.label
+            ?.toLowerCase?.()
+            ?.trim?.();
+          return label === "live" || label === "live now";
+        });
+
+        if (!video.videoId) continue;
+        if (isLive) continue;
+        if (isUnwanted(title, artist)) continue;
+        if (!isAcceptableDuration(durationSeconds)) continue;
+
+        results.push({
+          videoId: video.videoId,
+          title,
+          artist,
+          thumbnail: video.thumbnail?.thumbnails?.[0]?.url,
+          duration: durationText,
+        });
       }
-
-      const video = item?.compactVideoRenderer;
-      if (!video) continue;
-
-      const title = getText(video?.title);
-      const artist =
-        getText(video?.shortBylineText) ||
-        getText(video?.ownerText);
-
-      const thumbnail =
-        video?.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || "";
-
-      const duration =
-        getText(video?.lengthText) ||
-        getText(video?.lengthText?.simpleText);
-
-      addVideo(
-        video?.videoId || "",
-        title,
-        artist,
-        thumbnail,
-        duration,
-      );
     }
 
     return results.slice(0, 20);
