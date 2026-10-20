@@ -47,274 +47,288 @@ if (typeof artists?.name === "string") return artists.name;
 return "";
 }
 
-export async function getTrendingMusic(
-country = "United States",
-ytmusic?: YTMusic
-) {
-try {
-if (ytmusic) {
-const countryName = country.trim();
+/**
 
-```
+* Get trending music.
+  */
+  export async function getTrendingMusic(
+  country = "United States",
+  ytmusic?: YTMusic
+  ) {
+  try {
+  if (ytmusic) {
+  const countryName = country.trim();
+
   const searchQueries = [
-    `popular music in ${countryName}`,
-    `top songs ${countryName} 2026`,
-    `popular songs ${countryName}`,
-    `new music ${countryName} 2026`,
-    `hits from ${countryName}`,
+  `popular music in ${countryName}`,
+  `top songs ${countryName} 2026`,
+  `popular songs ${countryName}`,
+  `new music ${countryName} 2026`,
+  `hits from ${countryName}`,
   ];
 
   const allTracks: any[] = [];
   const seenIds = new Set<string>();
 
   for (const query of searchQueries) {
-    if (allTracks.length >= 30) break;
+  if (allTracks.length >= 30) break;
 
-    const response = await ytmusic.search(query, "songs");
-    const tracks = Array.isArray(response?.results)
-      ? response.results
-      : [];
+  ```
+   try {
+     const response = await ytmusic.search(query, "songs");
+     const tracks = Array.isArray(response?.results)
+       ? response.results
+       : [];
 
-    for (const track of tracks) {
-      if (!track?.videoId || seenIds.has(track.videoId)) continue;
+     for (const track of tracks) {
+       if (!track?.videoId || seenIds.has(track.videoId)) continue;
 
-      seenIds.add(track.videoId);
+       seenIds.add(track.videoId);
 
-      allTracks.push({
-        name: track.title,
-        artist: getArtistNames(track.artists),
-        videoId: track.videoId,
-        thumbnail: track.thumbnails?.[0]?.url,
-        duration: track.duration,
-      });
+       allTracks.push({
+         name: track.title,
+         artist: getArtistNames(track.artists),
+         videoId: track.videoId,
+         thumbnail: track.thumbnails?.[0]?.url,
+         duration: track.duration,
+       });
 
-      if (allTracks.length >= 30) break;
-    }
+       if (allTracks.length >= 30) break;
+     }
+   } catch (error) {
+     console.error(`Trending search failed for "${query}":`, error);
+   }
+  ```
+
   }
 
   if (allTracks.length > 0) {
-    return {
-      success: true,
-      country: countryName,
-      tracks: allTracks,
-    };
+  return {
+  success: true,
+  country: countryName,
+  tracks: allTracks,
+  };
   }
-}
+  }
 
-return {
+  return {
   success: false,
   error: "Could not fetch trending",
-};
-```
+  };
+  } catch (error) {
+  console.error("getTrendingMusic error:", error);
 
-} catch (error) {
-console.error("getTrendingMusic error:", error);
-
-```
-return {
+  return {
   success: false,
   error: error instanceof Error ? error.message : String(error),
-};
-```
+  };
+  }
+  }
 
-}
-}
+/**
 
-export async function getRadio(videoId: string, ytmusic: YTMusic) {
-try {
-if (!videoId?.trim()) {
-return { success: false, error: "Missing videoId" };
-}
+* Generate a radio mix from a video.
+  */
+  export async function getRadio(videoId: string, ytmusic: YTMusic) {
+  try {
+  if (!videoId?.trim()) {
+  return { success: false, error: "Missing videoId" };
+  }
 
-```
-const data = await ytmusic.getWatchPlaylist(
+  const data = await ytmusic.getWatchPlaylist(
   videoId,
   undefined,
   true,
   false,
   50
-);
+  );
 
-if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
+  if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
   return {
-    success: true,
-    seedVideoId: videoId,
-    tracks: data.tracks,
+  success: true,
+  seedVideoId: videoId,
+  tracks: data.tracks,
   };
-}
+  }
 
-return {
+  return {
   success: false,
   error: "Could not generate radio",
-};
-```
+  };
+  } catch (error) {
+  console.error("getRadio error:", error);
 
-} catch (error) {
-console.error("getRadio error:", error);
-
-```
-return {
+  return {
   success: false,
   error: error instanceof Error ? error.message : String(error),
-};
-```
+  };
+  }
+  }
 
-}
-}
+/**
 
-export async function getTopArtists(
-country?: string,
-limit = 20,
-ytmusic?: YTMusic
-) {
-try {
-const safeLimit = Number.isFinite(Number(limit))
-? Math.min(Math.max(Math.floor(Number(limit)), 1), 50)
-: 20;
+* Get top artists.
+  */
+  export async function getTopArtists(
+  country?: string,
+  limit = 20,
+  ytmusic?: YTMusic
+  ) {
+  try {
+  const safeLimit = Number.isFinite(Number(limit))
+  ? Math.min(Math.max(Math.floor(Number(limit)), 1), 50)
+  : 20;
 
-```
-if (country?.trim() && ytmusic) {
+  if (country?.trim() && ytmusic) {
   const countryName = country.trim();
 
   const searchQueries = [
-    `popular artists in ${countryName}`,
-    `top singers from ${countryName}`,
-    `popular musicians ${countryName}`,
-    `top rappers ${countryName}`,
-    `artists from ${countryName}`,
+  `popular artists in ${countryName}`,
+  `top singers from ${countryName}`,
+  `popular musicians ${countryName}`,
+  `top rappers ${countryName}`,
+  `artists from ${countryName}`,
   ];
 
   const allArtists: any[] = [];
   const seenIds = new Set<string>();
 
   for (const query of searchQueries) {
-    if (allArtists.length >= safeLimit) break;
+  if (allArtists.length >= safeLimit) break;
 
-    const response = await ytmusic.search(query, "artists");
-    const artists = Array.isArray(response?.results)
-      ? response.results
-      : [];
+  ```
+   try {
+     const response = await ytmusic.search(query, "artists");
+     const artists = Array.isArray(response?.results)
+       ? response.results
+       : [];
 
-    for (const artist of artists) {
-      if (!artist?.browseId || seenIds.has(artist.browseId)) continue;
+     for (const artist of artists) {
+       if (!artist?.browseId || seenIds.has(artist.browseId)) continue;
 
-      seenIds.add(artist.browseId);
+       seenIds.add(artist.browseId);
 
-      allArtists.push({
-        name: artist.title,
-        browseId: artist.browseId,
-        thumbnail: artist.thumbnails?.[0]?.url,
-      });
+       allArtists.push({
+         name: artist.title,
+         browseId: artist.browseId,
+         thumbnail: artist.thumbnails?.[0]?.url,
+       });
 
-      if (allArtists.length >= safeLimit) break;
-    }
+       if (allArtists.length >= safeLimit) break;
+     }
+   } catch (error) {
+     console.error(`Artist search failed for "${query}":`, error);
+   }
+  ```
+
   }
 
   if (allArtists.length > 0) {
-    return {
-      success: true,
-      country: countryName,
-      artists: allArtists.slice(0, safeLimit),
-    };
+  return {
+  success: true,
+  country: countryName,
+  artists: allArtists.slice(0, safeLimit),
+  };
   }
-}
+  }
 
-return await lastfmTopArtists(undefined, safeLimit);
-```
+  return await lastfmTopArtists(undefined, safeLimit);
+  } catch (error) {
+  console.error("getTopArtists error:", error);
 
-} catch (error) {
-console.error("getTopArtists error:", error);
-
-```
-return {
+  return {
   success: false,
   error: error instanceof Error ? error.message : String(error),
-};
-```
+  };
+  }
+  }
 
-}
-}
+/**
 
-export async function getTopTracks(
-country?: string,
-limit = 20,
-ytmusic?: YTMusic
-) {
-try {
-const safeLimit = Number.isFinite(Number(limit))
-? Math.min(Math.max(Math.floor(Number(limit)), 1), 50)
-: 20;
+* Get top tracks.
+  */
+  export async function getTopTracks(
+  country?: string,
+  limit = 20,
+  ytmusic?: YTMusic
+  ) {
+  try {
+  const safeLimit = Number.isFinite(Number(limit))
+  ? Math.min(Math.max(Math.floor(Number(limit)), 1), 50)
+  : 20;
 
-```
-if (country?.trim() && ytmusic) {
+  if (country?.trim() && ytmusic) {
   const countryName = country.trim();
 
   const searchQueries = [
-    `popular songs in ${countryName}`,
-    `top music ${countryName}`,
-    `hit songs from ${countryName}`,
-    `popular rap ${countryName}`,
-    `music from ${countryName}`,
+  `popular songs in ${countryName}`,
+  `top music ${countryName}`,
+  `hit songs from ${countryName}`,
+  `popular rap ${countryName}`,
+  `music from ${countryName}`,
   ];
 
   const allTracks: any[] = [];
   const seenIds = new Set<string>();
 
   for (const query of searchQueries) {
-    if (allTracks.length >= safeLimit) break;
+  if (allTracks.length >= safeLimit) break;
 
-    const response = await ytmusic.search(query, "songs");
-    const tracks = Array.isArray(response?.results)
-      ? response.results
-      : [];
+  ```
+   try {
+     const response = await ytmusic.search(query, "songs");
+     const tracks = Array.isArray(response?.results)
+       ? response.results
+       : [];
 
-    for (const track of tracks) {
-      if (!track?.videoId || seenIds.has(track.videoId)) continue;
+     for (const track of tracks) {
+       if (!track?.videoId || seenIds.has(track.videoId)) continue;
 
-      seenIds.add(track.videoId);
+       seenIds.add(track.videoId);
 
-      allTracks.push({
-        name: track.title,
-        artist: getArtistNames(track.artists),
-        videoId: track.videoId,
-        thumbnail: track.thumbnails?.[0]?.url,
-        duration: track.duration,
-      });
+       allTracks.push({
+         name: track.title,
+         artist: getArtistNames(track.artists),
+         videoId: track.videoId,
+         thumbnail: track.thumbnails?.[0]?.url,
+         duration: track.duration,
+       });
 
-      if (allTracks.length >= safeLimit) break;
-    }
+       if (allTracks.length >= safeLimit) break;
+     }
+   } catch (error) {
+     console.error(`Track search failed for "${query}":`, error);
+   }
+  ```
+
   }
 
   if (allTracks.length > 0) {
-    return {
-      success: true,
-      country: countryName,
-      tracks: allTracks.slice(0, safeLimit),
-    };
+  return {
+  success: true,
+  country: countryName,
+  tracks: allTracks.slice(0, safeLimit),
+  };
   }
-}
+  }
 
-return await lastfmTopTracks(undefined, safeLimit);
-```
+  return await lastfmTopTracks(undefined, safeLimit);
+  } catch (error) {
+  console.error("getTopTracks error:", error);
 
-} catch (error) {
-console.error("getTopTracks error:", error);
-
-```
-return {
+  return {
   success: false,
   error: error instanceof Error ? error.message : String(error),
-};
-```
-
-}
-}
+  };
+  }
+  }
 
 /**
 
 * Find similar tracks using Last.fm recommendations.
-* YouTube enrichment is optional: Last.fm results are preserved
-* even when YouTube search fails or returns no videos.
+*
+* YouTube enrichment is optional. If YouTube search fails or
+* returns no videos, the Last.fm recommendation is still returned.
   */
   export async function getSimilarTracks(
   title: string,
@@ -340,13 +354,20 @@ String(safeLimit)
 );
 } catch (error) {
 console.error("Last.fm similar-track lookup failed:", error);
+
+```
 return {
-error: "Failed to fetch similar tracks from Last.fm",
+  error: "Failed to fetch similar tracks from Last.fm",
 };
+```
+
 }
 
 if (!Array.isArray(lastfmResult)) {
-console.error("Last.fm returned an invalid similar-tracks response:", lastfmResult);
+console.error(
+"Last.fm returned an invalid similar-tracks response:",
+lastfmResult
+);
 
 ```
 return {
@@ -378,7 +399,8 @@ const uniqueTracks: SimilarTrack[] = [];
 const seenTracks = new Set<string>();
 
 for (const track of similarTracks) {
-const key = `${normalizeText(track.title)}::${normalizeText(track.artist)}`;
+const key =
+`${normalizeText(track.title)}::${normalizeText(track.artist)}`;
 
 ```
 if (seenTracks.has(key)) continue;
@@ -391,8 +413,7 @@ if (uniqueTracks.length >= safeLimit) break;
 
 }
 
-// No YouTube results are required to preserve Last.fm recommendations.
-const output: any[] = await Promise.all(
+const output = await Promise.all(
 uniqueTracks.map(async (track) => {
 let video: any = null;
 
@@ -414,7 +435,8 @@ let video: any = null;
         ) ??
         videos.find(
           (item: any) =>
-            typeof item?.videoId === "string" && item.videoId.trim()
+            typeof item?.videoId === "string" &&
+            item.videoId.trim()
         ) ??
         null;
     } catch (error) {
@@ -444,7 +466,6 @@ let video: any = null;
     };
   }
 
-  // Important: return the Last.fm recommendation even without a video.
   return {
     title: track.title,
     artist: track.artist,
