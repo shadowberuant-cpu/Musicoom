@@ -1,3 +1,4 @@
+
 /**
  * YouTube Music API - Core class
  * Handles search, browse, and player requests to YouTube Music's internal API
@@ -76,16 +77,116 @@ export class YTMusic {
   // ─── Player ───────────────────────────────────────────────
 
   async getSong(videoId: string) {
-    const data = await this.makeRequest("player", { videoId });
-    const details = data?.videoDetails || {};
+    if (!/^[\w-]{11}$/.test(videoId)) {
+      return null;
+    }
 
-    return {
-      videoId: details.videoId,
-      title: details.title,
-      author: details.author,
-      lengthSeconds: details.lengthSeconds,
-      thumbnail: details.thumbnail?.thumbnails?.[0]?.url,
-    };
+    // 1. Try YouTube Music's player endpoint.
+    try {
+      const data = await this.makeRequest("player", {
+        videoId,
+      });
+
+      const details = data?.videoDetails;
+
+      if (details?.videoId === videoId) {
+        return {
+          videoId: details.videoId,
+          title: details.title || "Unknown title",
+          author: details.author || null,
+          lengthSeconds: details.lengthSeconds ?? null,
+          thumbnail:
+            details.thumbnail?.thumbnails?.slice(-1)[0]?.url ??
+            `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        };
+      }
+
+      console.warn(
+        `YouTube Music player returned no usable details for ${videoId}`,
+      );
+    } catch (err) {
+      console.warn(
+        `YouTube Music player lookup failed for ${videoId}:`,
+        err,
+      );
+    }
+
+    // 2. Try YouTube's oEmbed endpoint for public video metadata.
+    try {
+      const oembedUrl =
+        "https://www.youtube.com/oembed?url=" +
+        encodeURIComponent(
+          `https://www.youtube.com/watch?v=${videoId}`,
+        ) +
+        "&format=json";
+
+      const response = await fetch(oembedUrl, {
+        headers: {
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data?.title) {
+          return {
+            videoId,
+            title: data.title,
+            author: data.author_name || null,
+            lengthSeconds: null,
+            thumbnail:
+              data.thumbnail_url ||
+              `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `YouTube oEmbed lookup failed for ${videoId}:`,
+        err,
+      );
+    }
+
+    // 3. Last fallback: search YouTube Music using the exact video ID.
+    try {
+      const result = await this.search(videoId);
+      const results = Array.isArray(result?.results)
+        ? result.results
+        : [];
+
+      const match = results.find(
+        (item: any) => item?.videoId === videoId,
+      );
+
+      if (match) {
+        return {
+          videoId,
+          title: match.title || "Unknown title",
+          author:
+            match.artists?.map((artist: any) => artist.name)
+              .filter(Boolean)
+              .join(", ") ||
+            match.author ||
+            null,
+          lengthSeconds: match.duration_seconds ??
+            match.lengthSeconds ??
+            null,
+          thumbnail:
+            match.thumbnails?.slice(-1)[0]?.url ||
+            match.thumbnail ||
+            `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        };
+      }
+    } catch (err) {
+      console.warn(
+        `YouTube Music search fallback failed for ${videoId}:`,
+        err,
+      );
+    }
+
+    return null;
   }
 
   // ─── Browse: Album ────────────────────────────────────────
@@ -115,20 +216,22 @@ export class YTMusic {
       data?.header?.musicVisualHeaderRenderer;
 
     if (oldHeader) {
-      title = oldHeader.title?.runs?.[0]?.text;
+      title = oldHeader.title?.runs?.[0]?.text || "";
 
       const subtitleRuns = oldHeader.subtitle?.runs ||
         oldHeader.straplineTextOne?.runs ||
         [];
 
       artist = subtitleRuns.find((r: any) => r.navigationEndpoint)?.text ||
-        subtitleRuns[0]?.text;
+        subtitleRuns[0]?.text ||
+        "";
 
       thumbnail =
         oldHeader.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails
           ?.slice(-1)[0]?.url ||
         oldHeader.thumbnail?.croppedSquareThumbnailRenderer?.thumbnail
-          ?.thumbnails?.slice(-1)[0]?.url;
+          ?.thumbnails?.slice(-1)[0]?.url ||
+        "";
     }
 
     const primaryContents = twoColumnPrimary || singleColumn || [];
