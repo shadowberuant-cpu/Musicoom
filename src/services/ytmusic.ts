@@ -663,6 +663,10 @@ export class YTMusic {
   }
 
   async getRelated(videoId: string) {
+    if (!/^[\w-]{11}$/.test(videoId)) {
+      return [];
+    }
+
     const url =
       `https://www.youtube.com/youtubei/v1/next?key=${encodeURIComponent(this.apiKey)}`;
 
@@ -683,59 +687,174 @@ export class YTMusic {
         ?.secondaryResults?.results ||
       [];
 
-    const results: any[] = [];
+    const results: {
+      videoId: string;
+      title: string;
+      artist: string;
+      thumbnail: string;
+      duration: string;
+    }[] = [];
+
+    const seen = new Set<string>();
+
+    const compilationPattern =
+      /\b(full album|full movie|jukebox|nonstop|non-stop|mega\s*mix|long mix|music compilation|song collection|complete album|all songs|top \d+ songs|1 hour mix|2 hour mix|3 hour mix|mashup|karaoke compilation|playlist mix)\b/i;
+
+    const nonMusicPattern =
+      /\b(gameplay|walkthrough|reaction video|daily vlog|prank video|news report|tutorial|unboxing|podcast episode)\b/i;
+
+    const musicTitlePattern =
+      /\b(official audio|official video|official music video|lyric video|lyrics|visualizer|audio|vevo|music video|lirik|lyrycs)\b/i;
+
+    const musicChannelPattern =
+      /\b(vevo|topic|records|music|entertainment|t-series|sony music|saregama|zee music|tips music|speed records|white hill|universal music|warner music|atlantic records|arista records|yash raj|yrf|times music|island records)\b/i;
+
+    const getText = (value: any): string => {
+      if (typeof value === "string") {
+        return value.trim();
+      }
+
+      if (Array.isArray(value?.runs)) {
+        return value.runs
+          .map((run: any) => run?.text || "")
+          .join("")
+          .trim();
+      }
+
+      return value?.simpleText?.trim?.() || "";
+    };
+
+    const parseDurationSeconds = (value: string): number => {
+      if (!value) return 0;
+
+      const parts = value.split(":").map((part) => {
+        const number = Number(part);
+        return Number.isFinite(number) ? number : NaN;
+      });
+
+      if (
+        parts.length < 2 ||
+        parts.length > 3 ||
+        parts.some((part) => Number.isNaN(part) || part < 0)
+      ) {
+        return 0;
+      }
+
+      return parts.reduce(
+        (total, part) => total * 60 + part,
+        0,
+      );
+    };
+
+    const addVideo = (
+      id: string,
+      title: string,
+      artist: string,
+      thumbnail: string,
+      duration: string,
+      channel = "",
+    ) => {
+      const cleanId = id.trim();
+      const cleanTitle = title.trim();
+      const cleanArtist = artist.trim();
+      const cleanChannel = channel.trim();
+
+      if (!/^[\w-]{11}$/.test(cleanId)) return;
+      if (cleanId === videoId || seen.has(cleanId)) return;
+      if (!cleanTitle || cleanTitle.length < 2) return;
+
+      if (compilationPattern.test(cleanTitle)) return;
+      if (nonMusicPattern.test(cleanTitle)) return;
+
+      const seconds = parseDurationSeconds(duration);
+
+      // Exclude short clips while retaining videos with unknown duration.
+      if (seconds > 0 && seconds < 60) return;
+
+      const hasMusicSignal =
+        musicTitlePattern.test(cleanTitle) ||
+        musicChannelPattern.test(cleanChannel) ||
+        musicChannelPattern.test(cleanArtist);
+
+      // Don't blindly reject independent artists; require a music signal
+      // only when the result includes channel metadata.
+      if (cleanChannel && !hasMusicSignal) return;
+
+      seen.add(cleanId);
+
+      results.push({
+        videoId: cleanId,
+        title: cleanTitle,
+        artist: cleanArtist || cleanChannel || "Unknown Artist",
+        thumbnail: thumbnail ||
+          `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
+        duration,
+      });
+    };
 
     for (const item of secondaryResults) {
-      if (item.lockupViewModel) {
-        const lockup = item.lockupViewModel;
-        const metadata = lockup.metadata?.lockupMetadataViewModel;
+      const lockup = item?.lockupViewModel;
 
-        const contentImage = lockup.contentImage
-          ?.collectionThumbnailViewModel?.primaryThumbnail
-          ?.thumbnailViewModel;
+      if (lockup) {
+        const metadata = lockup?.metadata?.lockupMetadataViewModel;
 
-        const vid = lockup.rendererContext?.commandContext?.onTap
-          ?.innertubeCommand?.watchEndpoint?.videoId ||
-          lockup.contentId;
+        const id =
+          lockup?.rendererContext?.commandContext?.onTap
+            ?.innertubeCommand?.watchEndpoint?.videoId ||
+          lockup?.contentId ||
+          "";
 
-        if (vid) {
-          results.push({
-            videoId: vid,
-            title: metadata?.title?.content,
-            artist: metadata?.metadata?.contentMetadataViewModel
-              ?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content,
-            thumbnail: contentImage?.image?.sources?.[0]?.url,
-            duration: metadata?.metadata?.contentMetadataViewModel
-              ?.metadataRows?.[0]?.metadataParts?.[2]?.text?.content,
-          });
-        }
-      } else if (item.compactVideoRenderer) {
-        const video = item.compactVideoRenderer;
-        const durationText = video.lengthText?.simpleText || "";
+        const title = getText(metadata?.title);
 
-        let durationSeconds = 0;
+        const metadataRows =
+          metadata?.metadata?.contentMetadataViewModel
+            ?.metadataRows || [];
 
-        if (durationText) {
-          const parts = durationText.split(":")
-            .map((p: string) => parseInt(p) || 0);
+        const metadataParts = metadataRows.flatMap(
+          (row: any) => row?.metadataParts || [],
+        );
 
-          if (parts.length === 2) {
-            durationSeconds = parts[0] * 60 + parts[1];
-          } else if (parts.length === 3) {
-            durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-          }
-        }
+        const textParts = metadataParts
+          .map((part: any) => getText(part?.text))
+          .filter(Boolean);
 
-        if (video.videoId && !(durationSeconds > 0 && durationSeconds <= 60)) {
-          results.push({
-            videoId: video.videoId,
-            title: video.title?.simpleText || video.title?.runs?.[0]?.text,
-            artist: video.shortBylineText?.runs?.[0]?.text,
-            thumbnail: video.thumbnail?.thumbnails?.[0]?.url,
-            duration: durationText,
-          });
-        }
+        const duration = textParts.find((text: string) =>
+          /^\d{1,2}:\d{2}(:\d{2})?$/.test(text)
+        ) || "";
+
+        const artist = textParts.find((text: string) =>
+          text !== duration
+        ) || "";
+
+        const thumbnail =
+          lockup?.contentImage?.collectionThumbnailViewModel
+            ?.primaryThumbnail?.thumbnailViewModel?.image?.sources
+            ?.slice(-1)?.[0]?.url ||
+          lockup?.contentImage?.thumbnailViewModel?.image?.sources
+            ?.slice(-1)?.[0]?.url ||
+          "";
+
+        addVideo(id, title, artist, thumbnail, duration);
+        continue;
       }
+
+      const video = item?.compactVideoRenderer;
+      if (!video) continue;
+
+      const title = getText(video?.title);
+      const artist = getText(video?.shortBylineText);
+      const thumbnail =
+        video?.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || "";
+      const duration = video?.lengthText?.simpleText || "";
+
+      addVideo(
+        video?.videoId || "",
+        title,
+        artist,
+        thumbnail,
+        duration,
+        artist,
+      );
     }
 
     return results.slice(0, 20);
