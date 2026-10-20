@@ -662,6 +662,7 @@ export class YTMusic {
     };
   }
 
+
   async getRelated(videoId: string) {
     if (!/^[\w-]{11}$/.test(videoId)) {
       return [];
@@ -685,6 +686,8 @@ export class YTMusic {
     const secondaryResults =
       data?.contents?.twoColumnWatchNextResults?.secondaryResults
         ?.secondaryResults?.results ||
+      data?.contents?.singleColumnWatchNextResultsRenderer
+        ?.secondaryResults?.results ||
       [];
 
     const results: {
@@ -703,15 +706,14 @@ export class YTMusic {
     const nonMusicPattern =
       /\b(gameplay|walkthrough|reaction video|daily vlog|prank video|news report|tutorial|unboxing|podcast episode)\b/i;
 
-    const musicTitlePattern =
-      /\b(official audio|official video|official music video|lyric video|lyrics|visualizer|audio|vevo|music video|lirik|lyrycs)\b/i;
-
-    const musicChannelPattern =
-      /\b(vevo|topic|records|music|entertainment|t-series|sony music|saregama|zee music|tips music|speed records|white hill|universal music|warner music|atlantic records|arista records|yash raj|yrf|times music|island records)\b/i;
-
+    // YouTube text can be a string, runs, simpleText, or { content: "..." }.
     const getText = (value: any): string => {
       if (typeof value === "string") {
         return value.trim();
+      }
+
+      if (typeof value?.content === "string") {
+        return value.content.trim();
       }
 
       if (Array.isArray(value?.runs)) {
@@ -721,21 +723,22 @@ export class YTMusic {
           .trim();
       }
 
-      return value?.simpleText?.trim?.() || "";
+      if (typeof value?.simpleText === "string") {
+        return value.simpleText.trim();
+      }
+
+      return "";
     };
 
     const parseDurationSeconds = (value: string): number => {
       if (!value) return 0;
 
-      const parts = value.split(":").map((part) => {
-        const number = Number(part);
-        return Number.isFinite(number) ? number : NaN;
-      });
+      const parts = value.split(":").map(Number);
 
       if (
         parts.length < 2 ||
         parts.length > 3 ||
-        parts.some((part) => Number.isNaN(part) || part < 0)
+        parts.some((part) => !Number.isFinite(part) || part < 0)
       ) {
         return 0;
       }
@@ -752,41 +755,31 @@ export class YTMusic {
       artist: string,
       thumbnail: string,
       duration: string,
-      channel = "",
     ) => {
       const cleanId = id.trim();
       const cleanTitle = title.trim();
       const cleanArtist = artist.trim();
-      const cleanChannel = channel.trim();
 
       if (!/^[\w-]{11}$/.test(cleanId)) return;
       if (cleanId === videoId || seen.has(cleanId)) return;
-      if (!cleanTitle || cleanTitle.length < 2) return;
+      if (cleanTitle.length < 2) return;
 
+      // Skip obvious compilations and non-music videos.
       if (compilationPattern.test(cleanTitle)) return;
       if (nonMusicPattern.test(cleanTitle)) return;
 
+      // Keep the original short-clip filter.
       const seconds = parseDurationSeconds(duration);
-
-      // Exclude short clips while retaining videos with unknown duration.
       if (seconds > 0 && seconds < 60) return;
-
-      const hasMusicSignal =
-        musicTitlePattern.test(cleanTitle) ||
-        musicChannelPattern.test(cleanChannel) ||
-        musicChannelPattern.test(cleanArtist);
-
-      // Don't blindly reject independent artists; require a music signal
-      // only when the result includes channel metadata.
-      if (cleanChannel && !hasMusicSignal) return;
 
       seen.add(cleanId);
 
       results.push({
         videoId: cleanId,
         title: cleanTitle,
-        artist: cleanArtist || cleanChannel || "Unknown Artist",
-        thumbnail: thumbnail ||
+        artist: cleanArtist || "Unknown Artist",
+        thumbnail:
+          thumbnail ||
           `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
         duration,
       });
@@ -804,11 +797,12 @@ export class YTMusic {
           lockup?.contentId ||
           "";
 
+        // Important: lockup titles often use { content: "..." }.
         const title = getText(metadata?.title);
 
         const metadataRows =
-          metadata?.metadata?.contentMetadataViewModel
-            ?.metadataRows || [];
+          metadata?.metadata?.contentMetadataViewModel?.metadataRows ||
+          [];
 
         const metadataParts = metadataRows.flatMap(
           (row: any) => row?.metadataParts || [],
@@ -818,13 +812,13 @@ export class YTMusic {
           .map((part: any) => getText(part?.text))
           .filter(Boolean);
 
-        const duration = textParts.find((text: string) =>
-          /^\d{1,2}:\d{2}(:\d{2})?$/.test(text)
-        ) || "";
+        const duration =
+          textParts.find((text: string) =>
+            /^\d{1,2}:\d{2}(:\d{2})?$/.test(text)
+          ) || "";
 
-        const artist = textParts.find((text: string) =>
-          text !== duration
-        ) || "";
+        const artist =
+          textParts.find((text: string) => text !== duration) || "";
 
         const thumbnail =
           lockup?.contentImage?.collectionThumbnailViewModel
@@ -842,10 +836,16 @@ export class YTMusic {
       if (!video) continue;
 
       const title = getText(video?.title);
-      const artist = getText(video?.shortBylineText);
+      const artist =
+        getText(video?.shortBylineText) ||
+        getText(video?.ownerText);
+
       const thumbnail =
         video?.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || "";
-      const duration = video?.lengthText?.simpleText || "";
+
+      const duration =
+        getText(video?.lengthText) ||
+        getText(video?.lengthText?.simpleText);
 
       addVideo(
         video?.videoId || "",
@@ -853,7 +853,6 @@ export class YTMusic {
         artist,
         thumbnail,
         duration,
-        artist,
       );
     }
 
