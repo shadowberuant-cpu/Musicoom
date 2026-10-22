@@ -1,15 +1,15 @@
 /**
- * Musicoom - Music for All
+ * Musicoom — Music for All
  * Render-friendly TypeScript module exporting a complete HTML page.
  *
- * Expected server endpoints include:
- * /api/search              /api/yt_search
- * /api/songs/:videoId      /api/albums/:browseId
- * /api/artists/:browseId   /api/playlists/:playlistId
- * /api/related/:videoId    /api/similar?title=&artist=
- * /api/charts?country=     /api/trending?country=
- * /api/top/artists         /api/top/tracks
- * /api/stream              /api/lyrics
+ * Endpoints used:
+ *   /api/search?q=&filter=          /api/yt_search?q=&filter=videos
+ *   /api/songs/:videoId             /api/albums/:browseId
+ *   /api/artists/:browseId          /api/playlists/:playlistId
+ *   /api/related/:videoId           /api/similar?title=&artist=
+ *   /api/trending?country=IND       /api/charts?country=IND
+ *   /api/top/artists?country=IND    /api/top/tracks?country=IND
+ *   /api/stream?id=                 /api/lyrics?title=&artist=
  */
 
 export const html = `<!DOCTYPE html>
@@ -155,7 +155,7 @@ export const html = `<!DOCTYPE html>
     z-index: 1;
     max-width: 1040px;
     margin: 0 auto;
-    padding: 18px 16px calc(var(--nav-h) + 170px + env(safe-area-inset-bottom));
+    padding: 18px 16px calc(var(--nav-h) + 190px + env(safe-area-inset-bottom));
   }
 
   .view { animation: fade .3s ease both; }
@@ -420,21 +420,13 @@ export const html = `<!DOCTYPE html>
 
   /* ---------------- Mini player ---------------- */
 
-  .mini-wrap {
+  .mini {
     position: fixed;
     z-index: 61;
-    left: 0; right: 0;
-    bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
-    display: flex;
-    justify-content: center;
-    padding: 0 10px 10px;
-    pointer-events: none;
-  }
-
-  .mini {
-    pointer-events: auto;
-    position: relative;
-    width: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(var(--nav-h) + 10px + env(safe-area-inset-bottom));
+    width: calc(100% - 20px);
     max-width: 720px;
     display: flex;
     align-items: center;
@@ -449,8 +441,8 @@ export const html = `<!DOCTYPE html>
     animation: rise .3s cubic-bezier(.2,.9,.3,1) both;
   }
   @keyframes rise {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: none; }
+    from { opacity: 0; transform: translate(-50%, 16px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
   }
 
   .mini-main {
@@ -553,7 +545,7 @@ export const html = `<!DOCTYPE html>
     position: relative;
     z-index: 2;
     margin: auto;
-    width: min(470px, 100%);
+    width: min(500px, 100%);
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -663,7 +655,7 @@ export const html = `<!DOCTYPE html>
   .sheet-volume { display: flex; align-items: center; gap: 12px; margin-top: 20px; color: var(--dim); }
   .sheet-volume input { flex: 1; accent-color: var(--accent); height: 4px; }
 
-  /* ---------------- Lyrics (expanded player only) ---------------- */
+  /* ---------------- Lyrics ---------------- */
 
   .lyrics-block {
     margin-top: 22px;
@@ -687,7 +679,7 @@ export const html = `<!DOCTYPE html>
   .lyrics-state { font-size: .66rem; color: var(--dim); text-align: right; }
 
   .lyrics-body {
-    max-height: 260px;
+    max-height: 280px;
     overflow-y: auto;
     padding-right: 6px;
     font-size: .87rem;
@@ -782,7 +774,7 @@ export const html = `<!DOCTYPE html>
   /* ---------------- Desktop ---------------- */
 
   @media (min-width: 900px) {
-    .main { padding: 30px 32px calc(var(--nav-h) + 180px + env(safe-area-inset-bottom)); }
+    .main { padding: 30px 32px calc(var(--nav-h) + 200px + env(safe-area-inset-bottom)); }
     .card, .card-art { width: 152px; }
     .card-art { height: 152px; }
     .detail-art { width: 168px; height: 168px; }
@@ -804,7 +796,7 @@ export const html = `<!DOCTYPE html>
       box-shadow: 0 40px 90px rgba(0, 0, 0, .7);
     }
     .sheet-art img { width: min(320px, 36vh); height: min(320px, 36vh); }
-    .lyrics-body { max-height: 300px; }
+    .lyrics-body { max-height: 320px; }
   }
 
   @media (max-width: 380px) {
@@ -902,7 +894,7 @@ export const html = `<!DOCTYPE html>
     <section id="homeView" class="view">
       <p class="eyebrow">Music for All · India</p>
       <h1 class="h1">Good vibes,<br><em>India</em></h1>
-      <p class="para">Trending tracks, top artists and albums — all in one column, just scroll.</p>
+      <p class="para">Trending tracks, top artists and albums — one column, just scroll.</p>
 
       <section class="shelf">
         <div class="shelf-head">
@@ -973,9 +965,10 @@ export const html = `<!DOCTYPE html>
       <section class="shelf">
         <div class="shelf-head"><h2 class="shelf-title">About this build</h2></div>
         <p class="para">
-          Musicoom streams audio through YouTube's embedded player and pulls metadata from the
-          Musicoom music API. Trending, charts and top artists are tuned to the India region,
-          and lyrics load in the expanded player whenever the lyrics endpoint has them.
+          Musicoom streams audio through YouTube's embedded player and pulls metadata
+          from the Musicoom music API. Trending, charts and top artists are tuned to
+          India (IND). Lyrics load in the expanded player whenever the lyrics endpoint
+          has them, with up to 3 retries per track.
         </p>
       </section>
 
@@ -989,24 +982,22 @@ export const html = `<!DOCTYPE html>
     <section id="detailView" class="view" hidden></section>
   </main>
 
-  <!-- Mini player (sits directly above the footer nav) -->
-  <div class="mini-wrap">
-    <div class="mini" id="mini" hidden>
-      <button class="mini-main" id="miniOpen" type="button" aria-label="Open player">
-        <img class="mini-art" id="miniArt" alt="">
-        <span class="mini-text">
-          <span class="mini-title" id="miniTitle"></span>
-          <span class="mini-artist" id="miniArtist"></span>
-        </span>
-      </button>
-      <button class="mini-btn play" id="miniPlay" type="button" aria-label="Play or pause">
-        <svg class="ic"><use href="#i-play"></use></svg>
-      </button>
-      <button class="mini-btn" id="miniNext" type="button" aria-label="Next track">
-        <svg class="ic"><use href="#i-next"></use></svg>
-      </button>
-      <span class="mini-progress"><i id="miniFill"></i></span>
-    </div>
+  <!-- Mini player (hidden until a track plays) -->
+  <div class="mini" id="mini" hidden>
+    <button class="mini-main" id="miniOpen" type="button" aria-label="Open player">
+      <img class="mini-art" id="miniArt" alt="">
+      <span class="mini-text">
+        <span class="mini-title" id="miniTitle"></span>
+        <span class="mini-artist" id="miniArtist"></span>
+      </span>
+    </button>
+    <button class="mini-btn play" id="miniPlay" type="button" aria-label="Play or pause">
+      <svg class="ic"><use href="#i-play"></use></svg>
+    </button>
+    <button class="mini-btn" id="miniNext" type="button" aria-label="Next track">
+      <svg class="ic"><use href="#i-next"></use></svg>
+    </button>
+    <span class="mini-progress"><i id="miniFill"></i></span>
   </div>
 
   <!-- Footer nav -->
@@ -1027,7 +1018,7 @@ export const html = `<!DOCTYPE html>
     </div>
   </nav>
 
-  <!-- Expanded player with lyrics -->
+  <!-- Expanded player + lyrics -->
   <div class="sheet" id="sheet" hidden>
     <img class="sheet-bg" id="sheetBg" alt="">
     <div class="sheet-shade"></div>
@@ -1095,15 +1086,17 @@ export const html = `<!DOCTYPE html>
 (function () {
   'use strict';
 
+  var NL = String.fromCharCode(10);
+
   /* ------------------------------------------------------------------ */
   /*  Constants & state                                                 */
   /* ------------------------------------------------------------------ */
 
-  var REGION = 'IND';               // discovery region code
-  var LYRICS_ATTEMPTS = 3;          // retries before giving up
+  var REGION = 'IND';
+  var LYRICS_ATTEMPTS = 3;
 
   var LS_RECENT = 'musicoom.recent.v1';
-  var LS_LIKED = 'musicoom.liked.v1';
+  var LS_LIKED  = 'musicoom.liked.v1';
 
   var state = {
     view: 'home',
@@ -1116,7 +1109,7 @@ export const html = `<!DOCTYPE html>
     searchFilter: '',
     trending: [],
     lyrics: '',
-    lyricsState: 'idle'            // idle | loading | ready | none
+    lyricsState: 'idle'
   };
 
   var yt = null;
@@ -1169,20 +1162,26 @@ export const html = `<!DOCTYPE html>
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
   }
 
+  function logWarn(label, error) {
+    try { console.warn('[Musicoom] ' + label, error); } catch (e) {}
+  }
+
   async function fetchJson(url) {
-    var response = await fetch(url, { headers: { Accept: 'application/json' } });
-    var text = await response.text();
-    var data;
     try {
-      data = text ? JSON.parse(text) : {};
-    } catch (e) {
-      data = { message: text };
+      var response = await fetch(url, { headers: { Accept: 'application/json' } });
+      var text = await response.text();
+      var data;
+      try { data = text ? JSON.parse(text) : {}; }
+      catch (e) { data = { message: text }; }
+      if (!response.ok) {
+        var message = (data && (data.error || data.message)) || ('HTTP ' + response.status);
+        throw new Error(message);
+      }
+      return data;
+    } catch (err) {
+      logWarn('API error for ' + url, err);
+      throw err;
     }
-    if (!response.ok) {
-      var message = data && (data.error || data.message);
-      throw new Error(message || ('HTTP ' + response.status));
-    }
-    return data;
   }
 
   /* ------------------------------------------------------------------ */
@@ -1194,9 +1193,7 @@ export const html = `<!DOCTYPE html>
       var raw = localStorage.getItem(key);
       var arr = raw ? JSON.parse(raw) : [];
       return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-      return [];
-    }
+    } catch (e) { return []; }
   }
 
   function writeStore(key, list) {
@@ -1258,7 +1255,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Artwork (high quality, no blurry thumbs)                          */
+  /*  Artwork                                                           */
   /* ------------------------------------------------------------------ */
 
   function ytThumb(videoId, big) {
@@ -1373,22 +1370,29 @@ export const html = `<!DOCTYPE html>
     };
   }
 
-  function extractItems(data) {
+  function extractTracks(data) {
     if (Array.isArray(data)) return data;
     if (!data || typeof data !== 'object') return [];
 
-    var keys = ['results', 'tracks', 'songs', 'items', 'data', 'audios', 'videos'];
+    var keys = ['results', 'tracks', 'songs', 'items', 'audios', 'videos',
+                'trending', 'charts', 'artists', 'albums', 'playlists'];
     for (var i = 0; i < keys.length; i++) {
-      var value = data[keys[i]];
-      if (Array.isArray(value)) return value;
-      if (value && Array.isArray(value.results)) return value.results;
-      if (value && Array.isArray(value.tracks)) return value.tracks;
-      if (value && Array.isArray(value.items)) return value.items;
+      if (Array.isArray(data[keys[i]])) return data[keys[i]];
+    }
+
+    var wrapKeys = ['data', 'result', 'response', 'payload'];
+    for (var j = 0; j < wrapKeys.length; j++) {
+      if (data[wrapKeys[j]] && typeof data[wrapKeys[j]] === 'object') {
+        var found = extractTracks(data[wrapKeys[j]]);
+        if (found.length) return found;
+      }
     }
 
     if (data.album && Array.isArray(data.album.tracks)) return data.album.tracks;
     if (data.artist && Array.isArray(data.artist.songs)) return data.artist.songs;
+    if (data.artist && Array.isArray(data.artist.topSongs)) return data.artist.topSongs;
     if (data.playlist && Array.isArray(data.playlist.tracks)) return data.playlist.tracks;
+
     return [];
   }
 
@@ -1398,7 +1402,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  View routing (footer nav)                                         */
+  /*  View routing                                                      */
   /* ------------------------------------------------------------------ */
 
   var VIEWS = ['home', 'search', 'library', 'profile', 'detail'];
@@ -1446,7 +1450,6 @@ export const html = `<!DOCTYPE html>
 
   function buildCard(track, options) {
     options = options || {};
-
     var card = document.createElement('button');
     card.type = 'button';
     card.className = 'card';
@@ -1566,14 +1569,14 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Home — single column, every section scrolls horizontally          */
+  /*  Home                                                              */
   /* ------------------------------------------------------------------ */
 
   async function loadTrending() {
     var rail = byId('trendingRail');
     try {
       var data = await fetchJson('/api/trending?country=' + REGION);
-      var list = extractItems(data).map(normalizeTrack).filter(function (t) {
+      var list = extractTracks(data).map(normalizeTrack).filter(function (t) {
         return !!t.videoId;
       });
       if (!list.length) throw new Error('empty');
@@ -1596,7 +1599,7 @@ export const html = `<!DOCTYPE html>
     var rail = byId('artistRail');
     try {
       var data = await fetchJson('/api/top/artists?country=' + REGION);
-      var list = extractItems(data).map(normalizeTrack).filter(function (t) {
+      var list = extractTracks(data).map(normalizeTrack).filter(function (t) {
         return !!t.browseId || !!t.videoId;
       });
       if (!list.length) throw new Error('empty');
@@ -1620,13 +1623,13 @@ export const html = `<!DOCTYPE html>
 
     try {
       var chart = await fetchJson('/api/charts?country=' + REGION);
-      list = extractItems(chart).map(normalizeTrack).filter(isAlbum);
+      list = extractTracks(chart).map(normalizeTrack).filter(isAlbum);
     } catch (e) { list = []; }
 
     if (!list.length) {
       try {
         var search = await fetchJson('/api/search?q=' + encodeURIComponent('top albums') + '&filter=albums');
-        list = extractItems(search).map(normalizeTrack).filter(isAlbum);
+        list = extractTracks(search).map(normalizeTrack).filter(isAlbum);
       } catch (e) { list = []; }
     }
 
@@ -1645,7 +1648,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Detail views (album / artist / playlist)                          */
+  /*  Detail views                                                      */
   /* ------------------------------------------------------------------ */
 
   function renderDetail(opts) {
@@ -1738,7 +1741,7 @@ export const html = `<!DOCTYPE html>
     try {
       var data = await fetchJson('/api/albums/' + encodeURIComponent(browseId));
       var album = data.album || data;
-      var tracks = extractItems(data).map(normalizeTrack).filter(function (t) {
+      var tracks = extractTracks(data).map(normalizeTrack).filter(function (t) {
         return !!t.videoId;
       });
 
@@ -1776,7 +1779,7 @@ export const html = `<!DOCTYPE html>
       var data = await fetchJson('/api/artists/' + encodeURIComponent(browseId));
       var artist = data.artist || data;
 
-      var raw = extractItems(data);
+      var raw = extractTracks(data);
       if (Array.isArray(data.topSongs)) raw = raw.concat(data.topSongs);
       if (Array.isArray(data.songs)) raw = raw.concat(data.songs);
 
@@ -1814,7 +1817,7 @@ export const html = `<!DOCTYPE html>
     try {
       var data = await fetchJson('/api/playlists/' + encodeURIComponent(playlistId));
       var playlist = data.playlist || data;
-      var tracks = extractItems(data).map(normalizeTrack).filter(function (t) {
+      var tracks = extractTracks(data).map(normalizeTrack).filter(function (t) {
         return !!t.videoId;
       });
 
@@ -1937,7 +1940,7 @@ export const html = `<!DOCTYPE html>
       var data = await fetchJson(url);
       if (seq !== searchSeq) return;
 
-      var items = extractItems(data).map(normalizeTrack);
+      var items = extractTracks(data).map(normalizeTrack);
       renderSearchResults(items);
     } catch (e) {
       if (seq === searchSeq) {
@@ -1981,16 +1984,14 @@ export const html = `<!DOCTYPE html>
   }
 
   function renderProfile() {
-    var recentCount = readStore(LS_RECENT).length;
-    var likedCount = readStore(LS_LIKED).length;
     var a = byId('statRecent');
     var b = byId('statLiked');
-    if (a) a.textContent = String(recentCount);
-    if (b) b.textContent = String(likedCount);
+    if (a) a.textContent = String(readStore(LS_RECENT).length);
+    if (b) b.textContent = String(readStore(LS_LIKED).length);
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Lyrics (expanded player only)                                     */
+  /*  Lyrics                                                            */
   /* ------------------------------------------------------------------ */
 
   function extractLyrics(data) {
@@ -2028,22 +2029,23 @@ export const html = `<!DOCTYPE html>
         }).filter(function (line) {
           return !!String(line || '').trim();
         });
-        if (lines.length) return lines.join('\n');
+        if (lines.length) return lines.join(NL);
       }
     }
     return '';
   }
 
   function cleanLyrics(text) {
-    return String(text)
-      .replace(/\r/g, '')
-      .split('\n')
-      .map(function (line) {
-        return line.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/, '');
-      })
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    var raw = String(text).replace(/\\r/g, '');
+    var lines = raw.split(NL);
+    var cleaned = lines.map(function (line) {
+      return line.replace(/^\\[\\d{1,2}:\\d{2}(?:[.:]\\d{1,3})?\\]\\s*/, '');
+    });
+    var joined = cleaned.join(NL);
+    while (joined.indexOf(NL + NL + NL) !== -1) {
+      joined = joined.replace(NL + NL + NL, NL + NL);
+    }
+    return joined.trim();
   }
 
   function renderLyrics() {
@@ -2180,11 +2182,11 @@ export const html = `<!DOCTYPE html>
     relatedPromise = (async function () {
       var results = await Promise.all([
         fetchJson('/api/related/' + encodeURIComponent(track.videoId))
-          .then(extractItems)
+          .then(extractTracks)
           .catch(function () { return []; }),
         fetchJson('/api/similar?title=' + encodeURIComponent(track.title) +
                  '&artist=' + encodeURIComponent(track.artist))
-          .then(extractItems)
+          .then(extractTracks)
           .catch(function () { return []; })
       ]);
 
@@ -2226,8 +2228,6 @@ export const html = `<!DOCTYPE html>
     showMini();
     syncPlayButtons();
 
-    // Lyrics only matter in the expanded player, but we start the lookup
-    // right away so the sheet is ready the moment it is opened.
     ensureLyrics(track);
 
     if (!ytReady || !yt) {
@@ -2273,11 +2273,8 @@ export const html = `<!DOCTYPE html>
       return;
     }
     try {
-      if (state.playing) {
-        yt.pauseVideo();
-      } else {
-        yt.playVideo();
-      }
+      if (state.playing) yt.pauseVideo();
+      else yt.playVideo();
     } catch (e) {
       toast('Playback control failed.');
     }
@@ -2428,8 +2425,9 @@ export const html = `<!DOCTYPE html>
           if (state.pendingPlay) {
             var pending = state.pendingPlay;
             state.pendingPlay = null;
-            try { yt.loadVideoById(pending.videoId); } catch (e) {}
+            try { yt.cueVideoById(pending.videoId); } catch (e) {}
             prefetchRelated(pending);
+            toast('Player ready — tap play to start.');
           }
         },
         onStateChange: function (event) {
@@ -2467,7 +2465,7 @@ export const html = `<!DOCTYPE html>
             try {
               var query = track.title + ' ' + track.artist + ' official audio';
               var data = await fetchJson('/api/yt_search?q=' + encodeURIComponent(query) + '&filter=videos');
-              var items = extractItems(data);
+              var items = extractTracks(data);
               var fallback = null;
               for (var i = 0; i < items.length; i++) {
                 var id = getVideoId(items[i]);
@@ -2496,7 +2494,7 @@ export const html = `<!DOCTYPE html>
       nodes[i].addEventListener('click', function () {
         var view = this.getAttribute('data-view');
         if (view === 'search') { goSearch(); return; }
-        if (view === 'home') { goHome(); return; }
+        if (view === 'home')   { goHome(); return; }
         showView(view);
       });
     }
@@ -2620,14 +2618,33 @@ export const html = `<!DOCTYPE html>
     script.async = true;
     script.onerror = function () {
       toast('The YouTube player API could not load.');
+      logWarn('YouTube IFrame API failed to load');
     };
     document.head.appendChild(script);
 
     window.addEventListener('beforeunload', stopProgress);
 
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !byId('sheet').hidden) closeSheet();
+      var sheet = byId('sheet');
+      if (event.key === 'Escape' && sheet && !sheet.hidden) closeSheet();
     });
+
+    // Debug handle
+    window.musicoom = {
+      state: state,
+      play: function (videoId, title, artist) {
+        playList([{
+          videoId: videoId,
+          title: title || 'Debug track',
+          artist: artist || 'Unknown artist',
+          thumbnail: ''
+        }], 0);
+      },
+      search: function (q) {
+        var input = byId('searchInput');
+        if (input) { input.value = q; goSearch(); runSearch(); }
+      }
+    };
   }
 
   if (document.readyState === 'loading') {
