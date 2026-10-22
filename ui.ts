@@ -2,14 +2,19 @@
  * Musicoom — Music for All
  * Render-friendly TypeScript module exporting a complete HTML page.
  *
- * Endpoints used:
- *   /api/search?q=&filter=          /api/yt_search?q=&filter=videos
- *   /api/songs/:videoId             /api/albums/:browseId
- *   /api/artists/:browseId          /api/playlists/:playlistId
- *   /api/related/:videoId           /api/similar?title=&artist=
- *   /api/trending?country=IND       /api/charts?country=IND
- *   /api/top/artists?country=IND    /api/top/tracks?country=IND
- *   /api/stream?id=                 /api/lyrics?title=&artist=
+ * Playback:
+ *   Primary  → <audio> streamed from /api/stream?id=  (keeps playing in
+ *              background / when the tab is hidden / when the phone is locked)
+ *   Fallback → YouTube iframe (used automatically when the stream endpoint
+ *              is missing, slow, or errors)
+ *
+ * Lyrics:
+ *   /api/lyrics?title=&artist=  (retried up to 3 times, cached per track)
+ *
+ * Discovery (region IND):
+ *   /api/trending?country=IND
+ *   /api/top/artists?country=IND
+ *   /api/charts?country=IND
  */
 
 export const html = `<!DOCTYPE html>
@@ -728,7 +733,7 @@ export const html = `<!DOCTYPE html>
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-  #ytplayer {
+  #ytplayer, #bgAudio {
     position: fixed;
     width: 1px; height: 1px;
     right: -10px; bottom: -10px;
@@ -965,10 +970,12 @@ export const html = `<!DOCTYPE html>
       <section class="shelf">
         <div class="shelf-head"><h2 class="shelf-title">About this build</h2></div>
         <p class="para">
-          Musicoom streams audio through YouTube's embedded player and pulls metadata
-          from the Musicoom music API. Trending, charts and top artists are tuned to
-          India (IND). Lyrics load in the expanded player whenever the lyrics endpoint
-          has them, with up to 3 retries per track.
+          Musicoom plays audio through the stream endpoint by default, so music
+          keeps playing when you switch tabs, minimise the browser, or lock your
+          phone. Media controls appear in the notification shade and on the lock
+          screen through the Media Session API. When a stream is unavailable the
+          embedded YouTube player takes over automatically. Lyrics are loaded from
+          <code>/api/lyrics?title=&amp;artist=</code> with up to 3 retries per track.
         </p>
       </section>
 
@@ -982,7 +989,7 @@ export const html = `<!DOCTYPE html>
     <section id="detailView" class="view" hidden></section>
   </main>
 
-  <!-- Mini player (hidden until a track plays) -->
+  <!-- Mini player -->
   <div class="mini" id="mini" hidden>
     <button class="mini-main" id="miniOpen" type="button" aria-label="Open player">
       <img class="mini-art" id="miniArt" alt="">
@@ -1081,6 +1088,7 @@ export const html = `<!DOCTYPE html>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div id="ytplayer"></div>
+  <audio id="bgAudio" preload="auto" playsinline></audio>
 
 <script>
 (function () {
@@ -1094,6 +1102,7 @@ export const html = `<!DOCTYPE html>
 
   var REGION = 'IND';
   var LYRICS_ATTEMPTS = 3;
+  var STREAM_TIMEOUT_MS = 6000;
 
   var LS_RECENT = 'musicoom.recent.v1';
   var LS_LIKED  = 'musicoom.liked.v1';
@@ -1114,6 +1123,10 @@ export const html = `<!DOCTYPE html>
 
   var yt = null;
   var ytReady = false;
+  var audio = null;
+  var activePlayer = '';       // 'audio' | 'youtube' | ''
+  var playToken = 0;
+
   var progressTimer = null;
   var searchSeq = 0;
   var searchTimer = null;
@@ -1163,7 +1176,7 @@ export const html = `<!DOCTYPE html>
   }
 
   function logWarn(label, error) {
-    try { console.warn('[Musicoom] ' + label, error); } catch (e) {}
+    try { console.warn('[Musicoom] ' + label, error || ''); } catch (e) {}
   }
 
   async function fetchJson(url) {
@@ -1991,7 +2004,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Lyrics                                                            */
+  /*  Lyrics ( /api/lyrics?title=&artist= )                             */
   /* ------------------------------------------------------------------ */
 
   function extractLyrics(data) {
@@ -2063,7 +2076,7 @@ export const html = `<!DOCTYPE html>
     if (state.lyricsState === 'ready' && state.lyrics) {
       body.className = 'lyrics-body';
       body.textContent = state.lyrics;
-      label.textContent = 'From the lyrics endpoint';
+      label.textContent = 'From /api/lyrics';
       return;
     }
 
@@ -2133,6 +2146,211 @@ export const html = `<!DOCTYPE html>
     state.lyrics = cleaned;
     state.lyricsState = cleaned ? 'ready' : 'none';
     renderLyrics();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Audio element (primary player)                                    */
+  /* ------------------------------------------------------------------ */
+
+  function ensureAudio() {
+    if (audio) return audio;
+
+    audio = byId('bgAudio');
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.id = 'bgAudio';
+      audio.preload = 'auto';
+      audio.setAttribute('playsinline', '');
+      audio.style.position = 'fixed';
+      audio.style.width = '1px';
+      audio.style.height = '1px';
+      audio.style.right = '-10px';
+      audio.style.bottom = '-10px';
+      audio.style.opacity = '0.01';
+      audio.style.pointerEvents = 'none';
+      document.body.appendChild(audio);
+    }
+
+    audio.volume = volume / 100;
+
+    audio.addEventListener('play', function () {
+      if (activePlayer !== 'audio') return;
+      state.playing = true;
+      syncPlayButtons();
+      startProgress();
+      updateMediaSessionState();
+    });
+
+    audio.addEventListener('pause', function () {
+      if (activePlayer !== 'audio') return;
+      if (audio.ended) return;
+      state.playing = false;
+      syncPlayButtons();
+      stopProgress();
+      tickProgress();
+      updateMediaSessionState();
+    });
+
+    audio.addEventListener('ended', function () {
+      if (activePlayer !== 'audio') return;
+      state.playing = false;
+      stopProgress();
+      nextTrack();
+    });
+
+    audio.addEventListener('timeupdate', tickProgress);
+
+    audio.addEventListener('error', function () {
+      if (activePlayer !== 'audio') return;
+      if (!state.current) return;
+      logWarn('Audio playback error, falling back to YouTube', audio.error);
+      activePlayer = 'youtube';
+      state.playing = false;
+      syncPlayButtons();
+      if (ytReady && yt) {
+        try { yt.loadVideoById(state.current.videoId); } catch (e) {}
+      } else {
+        state.pendingPlay = state.current;
+        toast('Player loading — tap play to start.');
+      }
+    });
+
+    return audio;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Stream URL resolution ( /api/stream?id= )                         */
+  /* ------------------------------------------------------------------ */
+
+  function pickStreamUrl(data) {
+    if (!data) return '';
+    if (typeof data === 'string') return data;
+
+    var keys = [
+      'url', 'streamUrl', 'stream_url', 'audioUrl', 'audio_url',
+      'audioURL', 'streamURL', 'link', 'src', 'hls', 'hlsUrl', 'hls_url',
+      'playbackUrl', 'playback_url', 'mediaUrl', 'media_url',
+      'file', 'fileUrl'
+    ];
+
+    for (var i = 0; i < keys.length; i++) {
+      var v = data[keys[i]];
+      if (typeof v === 'string' && v) {
+        if (v.indexOf('//') === 0) return 'https:' + v;
+        return v;
+      }
+    }
+
+    var nested = ['data', 'result', 'stream', 'audio', 'media', 'source'];
+    for (var j = 0; j < nested.length; j++) {
+      if (data[nested[j]] && typeof data[nested[j]] === 'object') {
+        var found = pickStreamUrl(data[nested[j]]);
+        if (found) return found;
+      }
+    }
+    return '';
+  }
+
+  function forceHttps(url) {
+    if (typeof url !== 'string') return '';
+    if (url.indexOf('//') === 0) return location.protocol + url;
+    if (url.indexOf('http://') === 0 && location.protocol === 'https:') {
+      return 'https://' + url.slice(7);
+    }
+    return url;
+  }
+
+  async function resolveStreamUrl(videoId) {
+    if (!videoId) return '';
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, STREAM_TIMEOUT_MS);
+
+    try {
+      var res = await fetch('/api/stream?id=' + encodeURIComponent(videoId), {
+        headers: { Accept: 'application/json, audio/*, */*' },
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!res.ok) return '';
+
+      var ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('audio/') === 0 || ct.indexOf('video/') === 0 ||
+          ct.indexOf('application/octet-stream') === 0) {
+        return forceHttps(res.url);
+      }
+
+      var text = await res.text();
+      var data;
+      try { data = text ? JSON.parse(text) : {}; } catch (e) { return ''; }
+
+      return forceHttps(pickStreamUrl(data));
+    } catch (e) {
+      clearTimeout(timer);
+      logWarn('resolveStreamUrl failed', e);
+      return '';
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Media Session (background / lock-screen controls)                 */
+  /* ------------------------------------------------------------------ */
+
+  function setMediaSessionMetadata(track) {
+    if (!('mediaSession' in navigator) || !track) return;
+    try {
+      var art = artSrc(track, true);
+      var artwork = art ? [
+        { src: art, sizes: '96x96',   type: 'image/jpeg' },
+        { src: art, sizes: '128x128', type: 'image/jpeg' },
+        { src: art, sizes: '192x192', type: 'image/jpeg' },
+        { src: art, sizes: '256x256', type: 'image/jpeg' },
+        { src: art, sizes: '384x384', type: 'image/jpeg' },
+        { src: art, sizes: '512x512', type: 'image/jpeg' }
+      ] : [];
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || 'Unknown track',
+        artist: track.artist || 'Unknown artist',
+        album: 'Musicoom',
+        artwork: artwork
+      });
+    } catch (e) {}
+  }
+
+  function updateMediaSessionState() {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = state.playing ? 'playing' : 'paused';
+    } catch (e) {}
+  }
+
+  function wireMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.setActionHandler('play', function () { togglePlay(); });
+      navigator.mediaSession.setActionHandler('pause', function () { togglePlay(); });
+      navigator.mediaSession.setActionHandler('previoustrack', function () { prevTrack(); });
+      navigator.mediaSession.setActionHandler('nexttrack', function () { nextTrack(); });
+      navigator.mediaSession.setActionHandler('stop', function () {
+        if (activePlayer === 'audio' && audio) {
+          audio.pause();
+          audio.currentTime = 0;
+        } else if (yt && ytReady) {
+          try { yt.pauseVideo(); yt.seekTo(0, true); } catch (e) {}
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', function (d) {
+        seekBy(-(d && d.seekOffset || 10));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', function (d) {
+        seekBy(d && d.seekOffset || 10);
+      });
+      navigator.mediaSession.setActionHandler('seekto', function (d) {
+        if (d && typeof d.seekTime === 'number') seekToSeconds(d.seekTime);
+      });
+    } catch (e) {
+      logWarn('mediaSession setup failed', e);
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -2210,6 +2428,57 @@ export const html = `<!DOCTYPE html>
     return relatedPromise;
   }
 
+  async function startPlayback(track) {
+    var myToken = ++playToken;
+
+    // 1) Try audio stream
+    var streamUrl = await resolveStreamUrl(track.videoId);
+    if (myToken !== playToken) return;
+
+    if (streamUrl) {
+      try {
+        if (yt && ytReady) { try { yt.pauseVideo(); } catch (e) {} }
+
+        var a = ensureAudio();
+        activePlayer = 'audio';
+        a.src = streamUrl;
+        a.volume = volume / 100;
+        try { a.load(); } catch (e) {}
+        await a.play();
+        if (myToken !== playToken) { try { a.pause(); } catch (e) {} return; }
+        setMediaSessionMetadata(track);
+        updateMediaSessionState();
+        return;
+      } catch (err) {
+        logWarn('Audio play failed, falling back to YouTube', err);
+        activePlayer = '';
+      }
+    }
+
+    if (myToken !== playToken) return;
+
+    // 2) Fallback — YouTube iframe
+    if (audio) {
+      try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch (e) {}
+    }
+    activePlayer = 'youtube';
+
+    if (!ytReady || !yt) {
+      state.pendingPlay = track;
+      return;
+    }
+
+    try {
+      yt.loadVideoById(track.videoId);
+      setMediaSessionMetadata(track);
+      updateMediaSessionState();
+    } catch (e) {
+      state.playing = false;
+      syncPlayButtons();
+      toast('Playback could not start.');
+    }
+  }
+
   function playCurrent() {
     var track = state.queue[state.queueIndex];
     if (!track || !track.videoId) {
@@ -2227,24 +2496,14 @@ export const html = `<!DOCTYPE html>
     renderNowPlaying();
     showMini();
     syncPlayButtons();
+    setMediaSessionMetadata(track);
+    updateMediaSessionState();
 
     ensureLyrics(track);
-
-    if (!ytReady || !yt) {
-      state.pendingPlay = track;
-      return;
-    }
-
-    try {
-      yt.loadVideoById(track.videoId);
-    } catch (e) {
-      toast('Playback could not start.');
-      state.playing = false;
-      syncPlayButtons();
-      return;
-    }
-
     prefetchRelated(track);
+
+    // Fire and forget — handles audio-first + YouTube-fallback internally.
+    startPlayback(track);
   }
 
   function playList(list, index) {
@@ -2268,6 +2527,19 @@ export const html = `<!DOCTYPE html>
       toast('Pick a song first.');
       return;
     }
+
+    if (activePlayer === 'audio' && audio) {
+      if (audio.paused) {
+        audio.play().catch(function (e) {
+          logWarn('audio.play failed', e);
+          toast('Playback failed. Tap again.');
+        });
+      } else {
+        audio.pause();
+      }
+      return;
+    }
+
     if (!ytReady || !yt) {
       toast('The player is still loading.');
       return;
@@ -2312,20 +2584,25 @@ export const html = `<!DOCTYPE html>
   }
 
   function prevTrack() {
-    if (yt && ytReady) {
+    if (activePlayer === 'audio' && audio) {
+      if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    } else if (activePlayer === 'youtube' && yt && ytReady) {
       try {
-        if ((yt.getCurrentTime() || 0) > 3) {
-          yt.seekTo(0, true);
-          return;
-        }
+        if ((yt.getCurrentTime() || 0) > 3) { yt.seekTo(0, true); return; }
       } catch (e) {}
     }
+
     if (state.queueIndex > 0) {
       state.queueIndex -= 1;
       playCurrent();
       return;
     }
-    try { if (yt && ytReady) yt.seekTo(0, true); } catch (e) {}
+
+    if (activePlayer === 'audio' && audio) {
+      try { audio.currentTime = 0; } catch (e) {}
+    } else if (yt && ytReady) {
+      try { yt.seekTo(0, true); } catch (e) {}
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -2346,35 +2623,81 @@ export const html = `<!DOCTYPE html>
   }
 
   function tickProgress() {
-    if (!yt || !ytReady) return;
-    try {
-      var current = yt.getCurrentTime() || 0;
-      var duration = yt.getDuration() || 0;
-      var percent = duration > 0 ? Math.min(100, (current / duration) * 100) : 0;
+    var current = 0;
+    var duration = 0;
 
-      var miniFill = byId('miniFill');
-      var sheetFill = byId('sheetFill');
-      if (miniFill) miniFill.style.width = percent + '%';
-      if (sheetFill) sheetFill.style.width = percent + '%';
+    if (activePlayer === 'audio' && audio) {
+      current = audio.currentTime || 0;
+      duration = isFinite(audio.duration) ? audio.duration : 0;
+    } else if (activePlayer === 'youtube' && yt && ytReady) {
+      try {
+        current = yt.getCurrentTime() || 0;
+        duration = yt.getDuration() || 0;
+      } catch (e) {}
+    }
 
-      var cur = byId('sheetCur');
-      var dur = byId('sheetDur');
-      if (cur) cur.textContent = fmt(current);
-      if (dur) dur.textContent = fmt(duration);
-    } catch (e) {}
+    var percent = duration > 0 ? Math.min(100, (current / duration) * 100) : 0;
+
+    var miniFill = byId('miniFill');
+    var sheetFill = byId('sheetFill');
+    if (miniFill) miniFill.style.width = percent + '%';
+    if (sheetFill) sheetFill.style.width = percent + '%';
+
+    var cur = byId('sheetCur');
+    var dur = byId('sheetDur');
+    if (cur) cur.textContent = fmt(current);
+    if (dur) dur.textContent = fmt(duration);
+
+    // Keep the lock-screen progress bar in sync.
+    if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+      try {
+        if (duration > 0 && isFinite(duration)) {
+          navigator.mediaSession.setPositionState({
+            duration: duration,
+            playbackRate: 1,
+            position: Math.min(current, duration)
+          });
+        }
+      } catch (e) {}
+    }
+  }
+
+  function seekToSeconds(seconds) {
+    if (activePlayer === 'audio' && audio && isFinite(audio.duration) && audio.duration > 0) {
+      audio.currentTime = Math.max(0, Math.min(audio.duration, seconds));
+    } else if (activePlayer === 'youtube' && yt && ytReady) {
+      try {
+        var d = yt.getDuration() || 0;
+        if (d > 0) yt.seekTo(Math.max(0, Math.min(d, seconds)), true);
+      } catch (e) {}
+    }
+  }
+
+  function seekBy(offset) {
+    var current = 0;
+    if (activePlayer === 'audio' && audio) {
+      current = audio.currentTime || 0;
+    } else if (activePlayer === 'youtube' && yt && ytReady) {
+      try { current = yt.getCurrentTime() || 0; } catch (e) {}
+    }
+    seekToSeconds(current + offset);
   }
 
   function seekFromEvent(event) {
     var bar = byId('sheetBar');
-    if (!bar || !yt || !ytReady) return;
+    if (!bar) return;
     var rect = bar.getBoundingClientRect();
     if (!rect.width) return;
-    var fraction = (event.clientX - rect.left) / rect.width;
-    fraction = Math.max(0, Math.min(1, fraction));
-    try {
-      var duration = yt.getDuration() || 0;
-      if (duration > 0) yt.seekTo(duration * fraction, true);
-    } catch (e) {}
+    var fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+
+    if (activePlayer === 'audio' && audio && isFinite(audio.duration) && audio.duration > 0) {
+      audio.currentTime = audio.duration * fraction;
+    } else if (activePlayer === 'youtube' && yt && ytReady) {
+      try {
+        var d = yt.getDuration() || 0;
+        if (d > 0) yt.seekTo(d * fraction, true);
+      } catch (e) {}
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -2422,15 +2745,17 @@ export const html = `<!DOCTYPE html>
         onReady: function () {
           ytReady = true;
           try { yt.setVolume(volume); } catch (e) {}
-          if (state.pendingPlay) {
+
+          if (state.pendingPlay && activePlayer !== 'audio') {
             var pending = state.pendingPlay;
             state.pendingPlay = null;
+            activePlayer = 'youtube';
             try { yt.cueVideoById(pending.videoId); } catch (e) {}
-            prefetchRelated(pending);
             toast('Player ready — tap play to start.');
           }
         },
         onStateChange: function (event) {
+          if (activePlayer !== 'youtube') return;
           if (!window.YT) return;
           var YTS = window.YT.PlayerState;
 
@@ -2438,11 +2763,13 @@ export const html = `<!DOCTYPE html>
             state.playing = true;
             syncPlayButtons();
             startProgress();
+            updateMediaSessionState();
           } else if (event.data === YTS.PAUSED) {
             state.playing = false;
             syncPlayButtons();
             stopProgress();
             tickProgress();
+            updateMediaSessionState();
           } else if (event.data === YTS.ENDED) {
             state.playing = false;
             stopProgress();
@@ -2452,6 +2779,7 @@ export const html = `<!DOCTYPE html>
           }
         },
         onError: async function (event) {
+          if (activePlayer !== 'youtube') return;
           var code = event && event.data;
           var track = state.current;
           state.playing = false;
@@ -2581,6 +2909,9 @@ export const html = `<!DOCTYPE html>
     if (vol) {
       vol.addEventListener('input', function () {
         volume = Number(this.value);
+        if (audio) {
+          try { audio.volume = volume / 100; } catch (e) {}
+        }
         if (yt && ytReady) {
           try { yt.setVolume(volume); } catch (e) {}
         }
@@ -2608,6 +2939,7 @@ export const html = `<!DOCTYPE html>
     wireNavigation();
     wireSearch();
     wirePlayer();
+    wireMediaSession();
 
     loadTrending();
     loadArtists();
@@ -2617,7 +2949,7 @@ export const html = `<!DOCTYPE html>
     script.src = 'https://www.youtube.com/iframe_api';
     script.async = true;
     script.onerror = function () {
-      toast('The YouTube player API could not load.');
+      toast('The YouTube fallback player could not load.');
       logWarn('YouTube IFrame API failed to load');
     };
     document.head.appendChild(script);
@@ -2643,7 +2975,8 @@ export const html = `<!DOCTYPE html>
       search: function (q) {
         var input = byId('searchInput');
         if (input) { input.value = q; goSearch(); runSearch(); }
-      }
+      },
+      _resolveStreamUrl: resolveStreamUrl
     };
   }
 
