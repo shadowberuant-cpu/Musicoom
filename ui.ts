@@ -1,5 +1,5 @@
 /**
- * Verome API - Music Player UI
+ * Musicoom - Music for All
  * Render-friendly TypeScript module exporting a complete HTML page.
  *
  * Expected server endpoints include:
@@ -18,7 +18,7 @@ export const html = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#05080a">
-<title>Verome — Music</title>
+<title>Musicoom — Music for All</title>
 <link rel="icon" href="/assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,8 +46,7 @@ export const html = `<!DOCTYPE html>
     --dim: #5b6f79;
     --danger: #fb7185;
 
-    --nav-h: 66px;
-    --sidebar-w: 250px;
+    --nav-h: 64px;
   }
 
   [hidden] { display: none !important; }
@@ -82,74 +81,7 @@ export const html = `<!DOCTYPE html>
       radial-gradient(700px 500px at 50% 110%, rgba(34, 211, 238, .07), transparent 65%);
   }
 
-  /* ---------------- Sidebar (desktop) ---------------- */
-
-  .sidebar {
-    display: none;
-    position: fixed;
-    z-index: 40;
-    top: 0; left: 0; bottom: 0;
-    width: var(--sidebar-w);
-    padding: 22px 14px 130px;
-    flex-direction: column;
-    gap: 24px;
-    background: linear-gradient(180deg, rgba(9, 16, 20, .94), rgba(5, 8, 10, .99));
-    border-right: 1px solid var(--border);
-    backdrop-filter: blur(20px);
-    overflow-y: auto;
-  }
-
-  .brand { display: flex; align-items: center; gap: 11px; padding: 0 8px; }
-  .brand-mark { position: relative; width: 40px; height: 40px; flex: 0 0 auto; }
-  .brand-logo {
-    width: 40px; height: 40px;
-    object-fit: contain;
-    border-radius: 12px;
-    filter: drop-shadow(0 8px 20px rgba(34, 211, 238, .38));
-  }
-  .brand-fallback {
-    position: absolute; inset: 0;
-    display: none;
-    place-items: center;
-    border-radius: 12px;
-    color: var(--accent);
-    background: radial-gradient(circle at 30% 20%, rgba(34,211,238,.28), rgba(5,8,10,.9));
-    border: 1px solid var(--accent-line);
-  }
-  .brand-fallback svg { width: 26px; height: 26px; }
-  .brand-name { font-weight: 800; font-size: 1.1rem; letter-spacing: -.5px; }
-  .brand-name b { color: var(--accent); font-weight: 800; }
-
-  .side-nav { display: flex; flex-direction: column; gap: 4px; }
-
-  .side-btn {
-    display: flex; align-items: center; gap: 13px;
-    width: 100%;
-    padding: 12px 14px;
-    border-radius: 12px;
-    color: var(--muted);
-    font-size: .92rem;
-    font-weight: 600;
-    text-align: left;
-    transition: background .18s ease, color .18s ease;
-  }
-  .side-btn:hover { color: var(--text); background: var(--surface-2); }
-  .side-btn.active { color: var(--accent); background: var(--accent-soft); }
-  .side-btn.active .ic { filter: drop-shadow(0 0 10px rgba(34,211,238,.5)); }
-
-  .side-foot {
-    margin-top: auto;
-    padding: 14px;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: linear-gradient(160deg, rgba(34,211,238,.09), rgba(11,18,22,.4));
-    color: var(--dim);
-    font-size: .72rem;
-    line-height: 1.6;
-  }
-  .side-foot b { display: block; color: var(--accent); font-size: .74rem; margin-bottom: 4px; }
-
-  /* ---------------- Topbar (mobile) ---------------- */
+  /* ---------------- Topbar ---------------- */
 
   .topbar {
     position: sticky;
@@ -164,14 +96,49 @@ export const html = `<!DOCTYPE html>
     backdrop-filter: blur(18px);
     border-bottom: 1px solid rgba(27, 42, 50, .7);
   }
-  .topbar .brand { padding: 0; gap: 9px; }
-  .topbar .brand-logo { width: 34px; height: 34px; border-radius: 10px; }
-  .topbar .brand-mark { width: 34px; height: 34px; }
-  .topbar .brand-name { font-size: 1.02rem; }
+
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-mark { position: relative; width: 36px; height: 36px; flex: 0 0 auto; }
+  .brand-logo {
+    width: 36px; height: 36px;
+    object-fit: contain;
+    border-radius: 11px;
+    filter: drop-shadow(0 8px 20px rgba(34, 211, 238, .38));
+  }
+  .brand-fallback {
+    position: absolute; inset: 0;
+    display: none;
+    place-items: center;
+    border-radius: 11px;
+    color: var(--accent);
+    background: radial-gradient(circle at 30% 20%, rgba(34,211,238,.28), rgba(5,8,10,.9));
+    border: 1px solid var(--accent-line);
+  }
+  .brand-fallback svg { width: 24px; height: 24px; }
+
+  .brand-text { min-width: 0; }
+  .brand-name {
+    display: block;
+    font-weight: 800;
+    font-size: 1.02rem;
+    letter-spacing: -.5px;
+    line-height: 1.15;
+  }
+  .brand-name b { color: var(--accent); }
+  .brand-tag {
+    display: block;
+    font-size: .6rem;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-weight: 600;
+    margin-top: 1px;
+  }
 
   .icon-btn {
     display: grid; place-items: center;
     width: 42px; height: 42px;
+    flex: 0 0 auto;
     border-radius: 50%;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -186,9 +153,9 @@ export const html = `<!DOCTYPE html>
   .main {
     position: relative;
     z-index: 1;
-    max-width: 1020px;
+    max-width: 1040px;
     margin: 0 auto;
-    padding: 18px 16px calc(var(--nav-h) + 160px);
+    padding: 18px 16px calc(var(--nav-h) + 170px + env(safe-area-inset-bottom));
   }
 
   .view { animation: fade .3s ease both; }
@@ -241,13 +208,13 @@ export const html = `<!DOCTYPE html>
 
   .card {
     flex: 0 0 auto;
-    width: 128px;
+    width: 132px;
     text-align: left;
     scroll-snap-align: start;
   }
   .card-art {
     position: relative;
-    width: 128px; height: 128px;
+    width: 132px; height: 132px;
     border-radius: 14px;
     overflow: hidden;
     background: var(--surface-2);
@@ -415,7 +382,7 @@ export const html = `<!DOCTYPE html>
   }
   .btn-ghost:hover { border-color: var(--border-2); }
 
-  /* ---------------- Bottom nav ---------------- */
+  /* ---------------- Footer nav ---------------- */
 
   .bottom-nav {
     position: fixed;
@@ -423,10 +390,15 @@ export const html = `<!DOCTYPE html>
     left: 0; right: 0; bottom: 0;
     height: calc(var(--nav-h) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    display: flex;
-    background: rgba(6, 11, 14, .92);
+    background: rgba(6, 11, 14, .94);
     backdrop-filter: blur(22px);
     border-top: 1px solid var(--border);
+  }
+  .bottom-nav-inner {
+    width: min(560px, 100%);
+    height: 100%;
+    margin: 0 auto;
+    display: flex;
   }
   .nav-item {
     flex: 1;
@@ -442,24 +414,35 @@ export const html = `<!DOCTYPE html>
     transition: color .18s;
   }
   .nav-item .ic { width: 22px; height: 22px; }
+  .nav-item:hover { color: var(--muted); }
   .nav-item.active { color: var(--accent); }
   .nav-item.active .ic { filter: drop-shadow(0 0 9px rgba(34, 211, 238, .5)); }
 
   /* ---------------- Mini player ---------------- */
 
-  .mini {
+  .mini-wrap {
     position: fixed;
     z-index: 61;
-    left: 10px;
-    right: 10px;
-    bottom: calc(var(--nav-h) + 10px + env(safe-area-inset-bottom));
+    left: 0; right: 0;
+    bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: center;
+    padding: 0 10px 10px;
+    pointer-events: none;
+  }
+
+  .mini {
+    pointer-events: auto;
+    position: relative;
+    width: 100%;
+    max-width: 720px;
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 8px;
     border: 1px solid var(--border-2);
     border-radius: 16px;
-    background: rgba(13, 21, 26, .95);
+    background: rgba(13, 21, 26, .96);
     backdrop-filter: blur(24px);
     box-shadow: 0 18px 42px rgba(0, 0, 0, .6);
     overflow: hidden;
@@ -489,6 +472,7 @@ export const html = `<!DOCTYPE html>
   }
   .mini-text { min-width: 0; flex: 1; }
   .mini-title {
+    display: block;
     font-size: .81rem;
     font-weight: 600;
     white-space: nowrap;
@@ -496,6 +480,7 @@ export const html = `<!DOCTYPE html>
     text-overflow: ellipsis;
   }
   .mini-artist {
+    display: block;
     margin-top: 3px;
     font-size: .7rem;
     color: var(--muted);
@@ -574,9 +559,19 @@ export const html = `<!DOCTYPE html>
     flex-direction: column;
     padding: 14px 22px calc(28px + env(safe-area-inset-bottom));
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
-  .sheet-top { display: flex; align-items: center; justify-content: space-between; }
+  .sheet-top {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 0 10px;
+    background: linear-gradient(180deg, rgba(5, 8, 10, .9), rgba(5, 8, 10, 0));
+  }
   .sheet-label {
     font-size: .66rem;
     letter-spacing: 1.8px;
@@ -585,20 +580,20 @@ export const html = `<!DOCTYPE html>
     color: var(--muted);
   }
 
-  .sheet-art { display: grid; place-items: center; padding: 22px 0 6px; }
+  .sheet-art { display: grid; place-items: center; padding: 18px 0 6px; }
   .sheet-art img {
-    width: min(74vw, 44vh, 330px);
-    height: min(74vw, 44vh, 330px);
+    width: min(74vw, 42vh, 320px);
+    height: min(74vw, 42vh, 320px);
     object-fit: cover;
     border-radius: 20px;
     box-shadow: 0 34px 70px rgba(0, 0, 0, .7);
     background: var(--surface-2);
   }
 
-  .sheet-meta { display: flex; align-items: flex-start; gap: 12px; margin-top: 22px; }
+  .sheet-meta { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; }
   .sheet-meta-text { flex: 1; min-width: 0; }
   .sheet-title {
-    font-size: 1.24rem;
+    font-size: 1.22rem;
     font-weight: 800;
     letter-spacing: -.6px;
     white-space: nowrap;
@@ -614,7 +609,7 @@ export const html = `<!DOCTYPE html>
     text-overflow: ellipsis;
   }
 
-  .sheet-progress { margin-top: 22px; }
+  .sheet-progress { margin-top: 20px; }
   .bar {
     height: 5px;
     border-radius: 999px;
@@ -644,7 +639,7 @@ export const html = `<!DOCTYPE html>
     align-items: center;
     justify-content: center;
     gap: 18px;
-    margin-top: 20px;
+    margin-top: 18px;
   }
   .sheet-btn {
     display: grid;
@@ -665,8 +660,47 @@ export const html = `<!DOCTYPE html>
   .sheet-btn.play .ic { width: 29px; height: 29px; }
   .sheet-btn.play:hover { filter: brightness(1.08); background: var(--accent); }
 
-  .sheet-volume { display: flex; align-items: center; gap: 12px; margin-top: 22px; color: var(--dim); }
+  .sheet-volume { display: flex; align-items: center; gap: 12px; margin-top: 20px; color: var(--dim); }
   .sheet-volume input { flex: 1; accent-color: var(--accent); height: 4px; }
+
+  /* ---------------- Lyrics (expanded player only) ---------------- */
+
+  .lyrics-block {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+  }
+  .lyrics-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .lyrics-title {
+    font-size: .68rem;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .lyrics-state { font-size: .66rem; color: var(--dim); text-align: right; }
+
+  .lyrics-body {
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 6px;
+    font-size: .87rem;
+    line-height: 1.85;
+    color: #cfe9ee;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    scrollbar-width: thin;
+  }
+  .lyrics-body::-webkit-scrollbar { width: 4px; }
+  .lyrics-body::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 999px; }
+  .lyrics-body.loading-lyrics { color: var(--accent); }
+  .lyrics-body.empty-lyrics { color: var(--muted); }
 
   /* ---------------- Misc ---------------- */
 
@@ -685,7 +719,7 @@ export const html = `<!DOCTYPE html>
     position: fixed;
     z-index: 300;
     left: 50%;
-    bottom: calc(var(--nav-h) + 160px);
+    bottom: calc(var(--nav-h) + 96px + env(safe-area-inset-bottom));
     transform: translate(-50%, 14px);
     max-width: min(400px, 88vw);
     padding: 11px 18px;
@@ -745,30 +779,12 @@ export const html = `<!DOCTYPE html>
   .stat b { display: block; font-size: 1.4rem; font-weight: 800; color: var(--accent); letter-spacing: -1px; }
   .stat span { display: block; margin-top: 4px; font-size: .74rem; color: var(--muted); }
 
-  /* ---------------- Desktop / tablet ---------------- */
+  /* ---------------- Desktop ---------------- */
 
   @media (min-width: 900px) {
-    .sidebar { display: flex; }
-    .topbar { display: none; }
-    .bottom-nav { display: none; }
-
-    .main {
-      margin: 0 0 0 var(--sidebar-w);
-      max-width: none;
-      padding: 34px 36px 150px;
-    }
-
-    .mini {
-      left: calc(var(--sidebar-w) + 20px);
-      right: 22px;
-      bottom: 20px;
-      max-width: 720px;
-      margin-left: auto;
-    }
-
-    .card, .card-art { width: 150px; }
-    .card-art { height: 150px; }
-
+    .main { padding: 30px 32px calc(var(--nav-h) + 180px + env(safe-area-inset-bottom)); }
+    .card, .card-art { width: 152px; }
+    .card-art { height: 152px; }
     .detail-art { width: 168px; height: 168px; }
 
     .sheet {
@@ -777,23 +793,23 @@ export const html = `<!DOCTYPE html>
       align-items: center;
     }
     .sheet-inner {
+      width: min(540px, 92vw);
       height: auto;
       max-height: 92vh;
       margin: auto;
       padding: 20px 28px 30px;
       border: 1px solid var(--border-2);
       border-radius: 26px;
-      background: rgba(8, 13, 17, .92);
+      background: rgba(8, 13, 17, .94);
       box-shadow: 0 40px 90px rgba(0, 0, 0, .7);
     }
-    .sheet-art img { width: min(330px, 40vh); height: min(330px, 40vh); }
-
-    .toast { bottom: 120px; }
+    .sheet-art img { width: min(320px, 36vh); height: min(320px, 36vh); }
+    .lyrics-body { max-height: 300px; }
   }
 
   @media (max-width: 380px) {
-    .card, .card-art { width: 112px; }
-    .card-art { height: 112px; }
+    .card, .card-art { width: 114px; }
+    .card-art { height: 114px; }
     .detail-art { width: 96px; height: 96px; }
   }
 
@@ -863,47 +879,18 @@ export const html = `<!DOCTYPE html>
     </symbol>
   </svg>
 
-  <!-- Desktop sidebar -->
-  <aside class="sidebar" aria-label="Primary">
-    <div class="brand">
-      <span class="brand-mark">
-        <img class="brand-logo" src="/assets/logo.png" alt="Verome"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
-        <span class="brand-fallback"><svg viewBox="0 0 48 48"><use href="#i-logo"></use></svg></span>
-      </span>
-      <span class="brand-name">Verome<b>.</b></span>
-    </div>
-
-    <nav class="side-nav">
-      <button class="side-btn active" data-view="home" type="button">
-        <svg class="ic"><use href="#i-home"></use></svg><span>Home</span>
-      </button>
-      <button class="side-btn" data-view="search" type="button">
-        <svg class="ic"><use href="#i-search"></use></svg><span>Search</span>
-      </button>
-      <button class="side-btn" data-view="library" type="button">
-        <svg class="ic"><use href="#i-library"></use></svg><span>Your Library</span>
-      </button>
-      <button class="side-btn" data-view="profile" type="button">
-        <svg class="ic"><use href="#i-user"></use></svg><span>Profile</span>
-      </button>
-    </nav>
-
-    <div class="side-foot">
-      <b>Region · India</b>
-      Trending, charts and top artists are tuned to India (IN).
-    </div>
-  </aside>
-
-  <!-- Mobile topbar -->
+  <!-- Topbar: logo left, search right -->
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">
-        <img class="brand-logo" src="/assets/logo.png" alt="Verome"
+        <img class="brand-logo" src="/assets/logo.png" alt="Musicoom"
              onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
         <span class="brand-fallback"><svg viewBox="0 0 48 48"><use href="#i-logo"></use></svg></span>
       </span>
-      <span class="brand-name">Verome<b>.</b></span>
+      <span class="brand-text">
+        <span class="brand-name">Musicoom<b>.</b></span>
+        <span class="brand-tag">Music for All</span>
+      </span>
     </div>
     <button class="icon-btn" id="topSearch" type="button" aria-label="Search">
       <svg class="ic"><use href="#i-search"></use></svg>
@@ -913,17 +900,17 @@ export const html = `<!DOCTYPE html>
   <main class="main">
     <!-- HOME -->
     <section id="homeView" class="view">
-      <p class="eyebrow">Region · India</p>
+      <p class="eyebrow">Music for All · India</p>
       <h1 class="h1">Good vibes,<br><em>India</em></h1>
-      <p class="para">Trending tracks, top artists and albums — all in one place.</p>
+      <p class="para">Trending tracks, top artists and albums — all in one column, just scroll.</p>
 
       <section class="shelf">
         <div class="shelf-head">
           <h2 class="shelf-title">Trending now</h2>
           <button class="shelf-action" id="trendingAll" type="button">See all</button>
         </div>
-        <div class="rows" id="trendingRows">
-          <div class="loading">Loading trending…</div>
+        <div class="rail" id="trendingRail">
+          <div class="loading" style="width:100%">Loading trending…</div>
         </div>
       </section>
 
@@ -971,10 +958,10 @@ export const html = `<!DOCTYPE html>
     <section id="profileView" class="view" hidden>
       <p class="eyebrow">Account</p>
       <div class="profile-card">
-        <div class="avatar">V</div>
+        <div class="avatar">M</div>
         <div>
-          <div class="profile-name">Verome Listener</div>
-          <div class="profile-sub">India · Free plan</div>
+          <div class="profile-name">Musicoom Listener</div>
+          <div class="profile-sub">India · Music for All</div>
         </div>
       </div>
 
@@ -986,8 +973,9 @@ export const html = `<!DOCTYPE html>
       <section class="shelf">
         <div class="shelf-head"><h2 class="shelf-title">About this build</h2></div>
         <p class="para">
-          Verome streams audio through YouTube's embedded player and pulls metadata from the
-          Verome music API. Discovery, charts and top artists are configured for the India region.
+          Musicoom streams audio through YouTube's embedded player and pulls metadata from the
+          Musicoom music API. Trending, charts and top artists are tuned to the India region,
+          and lyrics load in the expanded player whenever the lyrics endpoint has them.
         </p>
       </section>
 
@@ -1001,25 +989,45 @@ export const html = `<!DOCTYPE html>
     <section id="detailView" class="view" hidden></section>
   </main>
 
-  <!-- Mini player -->
-  <div class="mini" id="mini" hidden>
-    <button class="mini-main" id="miniOpen" type="button" aria-label="Open player">
-      <img class="mini-art" id="miniArt" alt="">
-      <span class="mini-text">
-        <span class="mini-title" id="miniTitle"></span>
-        <span class="mini-artist" id="miniArtist"></span>
-      </span>
-    </button>
-    <button class="mini-btn play" id="miniPlay" type="button" aria-label="Play or pause">
-      <svg class="ic"><use href="#i-play"></use></svg>
-    </button>
-    <button class="mini-btn" id="miniNext" type="button" aria-label="Next track">
-      <svg class="ic"><use href="#i-next"></use></svg>
-    </button>
-    <span class="mini-progress"><i id="miniFill"></i></span>
+  <!-- Mini player (sits directly above the footer nav) -->
+  <div class="mini-wrap">
+    <div class="mini" id="mini" hidden>
+      <button class="mini-main" id="miniOpen" type="button" aria-label="Open player">
+        <img class="mini-art" id="miniArt" alt="">
+        <span class="mini-text">
+          <span class="mini-title" id="miniTitle"></span>
+          <span class="mini-artist" id="miniArtist"></span>
+        </span>
+      </button>
+      <button class="mini-btn play" id="miniPlay" type="button" aria-label="Play or pause">
+        <svg class="ic"><use href="#i-play"></use></svg>
+      </button>
+      <button class="mini-btn" id="miniNext" type="button" aria-label="Next track">
+        <svg class="ic"><use href="#i-next"></use></svg>
+      </button>
+      <span class="mini-progress"><i id="miniFill"></i></span>
+    </div>
   </div>
 
-  <!-- Expanded player -->
+  <!-- Footer nav -->
+  <nav class="bottom-nav" aria-label="Main navigation">
+    <div class="bottom-nav-inner">
+      <button class="nav-item active" data-view="home" type="button">
+        <svg class="ic"><use href="#i-home"></use></svg><span>Home</span>
+      </button>
+      <button class="nav-item" data-view="search" type="button">
+        <svg class="ic"><use href="#i-search"></use></svg><span>Search</span>
+      </button>
+      <button class="nav-item" data-view="library" type="button">
+        <svg class="ic"><use href="#i-library"></use></svg><span>Your Library</span>
+      </button>
+      <button class="nav-item" data-view="profile" type="button">
+        <svg class="ic"><use href="#i-user"></use></svg><span>Profile</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Expanded player with lyrics -->
   <div class="sheet" id="sheet" hidden>
     <img class="sheet-bg" id="sheetBg" alt="">
     <div class="sheet-shade"></div>
@@ -1069,24 +1077,16 @@ export const html = `<!DOCTYPE html>
         <svg class="ic" style="width:18px;height:18px"><use href="#i-volume"></use></svg>
         <input type="range" id="vol" min="0" max="100" value="85" aria-label="Volume">
       </div>
+
+      <div class="lyrics-block">
+        <div class="lyrics-head">
+          <span class="lyrics-title">Lyrics</span>
+          <span class="lyrics-state" id="lyricsState"></span>
+        </div>
+        <div class="lyrics-body" id="lyricsBody">Select a track to see lyrics.</div>
+      </div>
     </div>
   </div>
-
-  <!-- Bottom nav (mobile) -->
-  <nav class="bottom-nav" aria-label="Main navigation">
-    <button class="nav-item active" data-view="home" type="button">
-      <svg class="ic"><use href="#i-home"></use></svg><span>Home</span>
-    </button>
-    <button class="nav-item" data-view="search" type="button">
-      <svg class="ic"><use href="#i-search"></use></svg><span>Search</span>
-    </button>
-    <button class="nav-item" data-view="library" type="button">
-      <svg class="ic"><use href="#i-library"></use></svg><span>Your Library</span>
-    </button>
-    <button class="nav-item" data-view="profile" type="button">
-      <svg class="ic"><use href="#i-user"></use></svg><span>Profile</span>
-    </button>
-  </nav>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div id="ytplayer"></div>
@@ -1099,9 +1099,11 @@ export const html = `<!DOCTYPE html>
   /*  Constants & state                                                 */
   /* ------------------------------------------------------------------ */
 
-  var REGION = 'IN';
-  var LS_RECENT = 'verome.recent.v1';
-  var LS_LIKED = 'verome.liked.v1';
+  var REGION = 'IND';               // discovery region code
+  var LYRICS_ATTEMPTS = 3;          // retries before giving up
+
+  var LS_RECENT = 'musicoom.recent.v1';
+  var LS_LIKED = 'musicoom.liked.v1';
 
   var state = {
     view: 'home',
@@ -1113,7 +1115,8 @@ export const html = `<!DOCTYPE html>
     pendingPlay: null,
     searchFilter: '',
     trending: [],
-    chart: []
+    lyrics: '',
+    lyricsState: 'idle'            // idle | loading | ready | none
   };
 
   var yt = null;
@@ -1125,6 +1128,9 @@ export const html = `<!DOCTYPE html>
   var volume = 85;
   var relatedKey = '';
   var relatedPromise = null;
+
+  var lyricsToken = 0;
+  var lyricsCache = {};
 
   /* ------------------------------------------------------------------ */
   /*  Tiny helpers                                                      */
@@ -1143,6 +1149,10 @@ export const html = `<!DOCTYPE html>
     var m = Math.floor(total / 60);
     var s = total % 60;
     return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
   function toast(message) {
@@ -1248,7 +1258,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Artwork                                                           */
+  /*  Artwork (high quality, no blurry thumbs)                          */
   /* ------------------------------------------------------------------ */
 
   function ytThumb(videoId, big) {
@@ -1279,6 +1289,7 @@ export const html = `<!DOCTYPE html>
   function setImage(img, track, big) {
     if (!img) return;
     var src = artSrc(track, big);
+    img.style.visibility = 'visible';
     img.src = src;
     img.onerror = function () {
       var id = track && track.videoId;
@@ -1387,7 +1398,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  View routing                                                      */
+  /*  View routing (footer nav)                                         */
   /* ------------------------------------------------------------------ */
 
   var VIEWS = ['home', 'search', 'library', 'profile', 'detail'];
@@ -1430,8 +1441,42 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Row builders                                                      */
+  /*  Card / row builders                                               */
   /* ------------------------------------------------------------------ */
+
+  function buildCard(track, options) {
+    options = options || {};
+
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'card';
+
+    var artBox = document.createElement('div');
+    artBox.className = 'card-art' + (options.round ? ' round' : '');
+
+    var img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = '';
+    setImage(img, track, false);
+    artBox.appendChild(img);
+
+    var title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = track.title;
+
+    var sub = document.createElement('div');
+    sub.className = 'card-sub';
+    sub.textContent = options.sub || track.artist || '';
+
+    card.appendChild(artBox);
+    card.appendChild(title);
+    card.appendChild(sub);
+
+    if (typeof options.onClick === 'function') {
+      card.addEventListener('click', options.onClick);
+    }
+    return card;
+  }
 
   function buildRow(track, index, onClick) {
     var row = document.createElement('button');
@@ -1521,11 +1566,11 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Home                                                              */
+  /*  Home — single column, every section scrolls horizontally          */
   /* ------------------------------------------------------------------ */
 
   async function loadTrending() {
-    var box = byId('trendingRows');
+    var rail = byId('trendingRail');
     try {
       var data = await fetchJson('/api/trending?country=' + REGION);
       var list = extractItems(data).map(normalizeTrack).filter(function (t) {
@@ -1533,18 +1578,17 @@ export const html = `<!DOCTYPE html>
       });
       if (!list.length) throw new Error('empty');
 
-      var top = list.slice(0, 12);
-      state.trending = top;
+      state.trending = list;
 
-      box.innerHTML = '';
-      top.forEach(function (track, index) {
-        box.appendChild(buildRow(track, index, function () {
-          playList(top, index);
+      rail.innerHTML = '';
+      list.slice(0, 20).forEach(function (track, index) {
+        rail.appendChild(buildCard(track, {
+          sub: track.artist,
+          onClick: function () { playList(state.trending, index); }
         }));
       });
-      syncActiveRows();
     } catch (e) {
-      box.innerHTML = '<div class="empty">Trending is unavailable right now.</div>';
+      rail.innerHTML = '<div class="empty" style="width:100%">Trending is unavailable right now.</div>';
     }
   }
 
@@ -1559,33 +1603,11 @@ export const html = `<!DOCTYPE html>
 
       rail.innerHTML = '';
       list.slice(0, 16).forEach(function (artist) {
-        var card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'card';
-
-        var artBox = document.createElement('div');
-        artBox.className = 'card-art round';
-        var img = document.createElement('img');
-        img.loading = 'lazy';
-        img.alt = '';
-        setImage(img, artist, false);
-        artBox.appendChild(img);
-
-        var title = document.createElement('div');
-        title.className = 'card-title';
-        title.textContent = artist.title;
-
-        var sub = document.createElement('div');
-        sub.className = 'card-sub';
-        sub.textContent = 'Artist';
-
-        card.appendChild(artBox);
-        card.appendChild(title);
-        card.appendChild(sub);
-        card.addEventListener('click', function () {
-          openArtist(artist.browseId, artist);
-        });
-        rail.appendChild(card);
+        rail.appendChild(buildCard(artist, {
+          round: true,
+          sub: 'Artist',
+          onClick: function () { openArtist(artist.browseId, artist); }
+        }));
       });
     } catch (e) {
       rail.innerHTML = '<div class="empty" style="width:100%">Top artists are unavailable right now.</div>';
@@ -1615,33 +1637,10 @@ export const html = `<!DOCTYPE html>
 
     rail.innerHTML = '';
     list.slice(0, 16).forEach(function (album) {
-      var card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'card';
-
-      var artBox = document.createElement('div');
-      artBox.className = 'card-art';
-      var img = document.createElement('img');
-      img.loading = 'lazy';
-      img.alt = '';
-      setImage(img, album, false);
-      artBox.appendChild(img);
-
-      var title = document.createElement('div');
-      title.className = 'card-title';
-      title.textContent = album.title;
-
-      var sub = document.createElement('div');
-      sub.className = 'card-sub';
-      sub.textContent = album.artist || 'Album';
-
-      card.appendChild(artBox);
-      card.appendChild(title);
-      card.appendChild(sub);
-      card.addEventListener('click', function () {
-        openAlbum(album.browseId, album);
-      });
-      rail.appendChild(card);
+      rail.appendChild(buildCard(album, {
+        sub: album.artist || 'Album',
+        onClick: function () { openAlbum(album.browseId, album); }
+      }));
     });
   }
 
@@ -1991,6 +1990,150 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
+  /*  Lyrics (expanded player only)                                     */
+  /* ------------------------------------------------------------------ */
+
+  function extractLyrics(data) {
+    if (!data) return '';
+
+    var candidates = [
+      data.lyrics, data.plainLyrics, data.syncedLyrics,
+      data.text, data.lrc, data.body, data.content
+    ];
+
+    if (data.data && typeof data.data === 'object') {
+      candidates = candidates.concat([
+        data.data.lyrics, data.data.plainLyrics,
+        data.data.syncedLyrics, data.data.text, data.data.body
+      ]);
+    }
+    if (data.result && typeof data.result === 'object') {
+      candidates = candidates.concat([
+        data.result.lyrics, data.result.plainLyrics,
+        data.result.syncedLyrics, data.result.text
+      ]);
+    }
+    if (Array.isArray(data.lines)) candidates.push(data.lines);
+
+    for (var i = 0; i < candidates.length; i++) {
+      var value = candidates[i];
+      if (typeof value === 'string' && value.trim()) return value;
+      if (Array.isArray(value)) {
+        var lines = value.map(function (line) {
+          if (typeof line === 'string') return line;
+          if (line && typeof line === 'object') {
+            return line.text || line.line || line.words || line.lyrics || '';
+          }
+          return '';
+        }).filter(function (line) {
+          return !!String(line || '').trim();
+        });
+        if (lines.length) return lines.join('\n');
+      }
+    }
+    return '';
+  }
+
+  function cleanLyrics(text) {
+    return String(text)
+      .replace(/\r/g, '')
+      .split('\n')
+      .map(function (line) {
+        return line.replace(/^\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*/, '');
+      })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function renderLyrics() {
+    var body = byId('lyricsBody');
+    var label = byId('lyricsState');
+    if (!body || !label) return;
+
+    if (state.lyricsState === 'loading') {
+      body.className = 'lyrics-body loading-lyrics';
+      body.textContent = 'Looking for lyrics…';
+      label.textContent = '';
+      return;
+    }
+
+    if (state.lyricsState === 'ready' && state.lyrics) {
+      body.className = 'lyrics-body';
+      body.textContent = state.lyrics;
+      label.textContent = 'From the lyrics endpoint';
+      return;
+    }
+
+    if (state.lyricsState === 'none') {
+      body.className = 'lyrics-body empty-lyrics';
+      body.textContent = 'Lyrics aren’t available for this track. Tried ' +
+        LYRICS_ATTEMPTS + ' times.';
+      label.textContent = 'Unavailable';
+      return;
+    }
+
+    body.className = 'lyrics-body';
+    body.textContent = 'Select a track to see lyrics.';
+    label.textContent = '';
+  }
+
+  async function ensureLyrics(track) {
+    var token = ++lyricsToken;
+
+    if (!track || !track.title) {
+      state.lyrics = '';
+      state.lyricsState = 'none';
+      renderLyrics();
+      return;
+    }
+
+    var key = track.videoId || (track.title + '|' + track.artist);
+
+    if (Object.prototype.hasOwnProperty.call(lyricsCache, key)) {
+      state.lyrics = lyricsCache[key];
+      state.lyricsState = lyricsCache[key] ? 'ready' : 'none';
+      renderLyrics();
+      return;
+    }
+
+    state.lyrics = '';
+    state.lyricsState = 'loading';
+    renderLyrics();
+
+    var found = '';
+
+    for (var attempt = 1; attempt <= LYRICS_ATTEMPTS; attempt++) {
+      if (token !== lyricsToken) return;
+
+      try {
+        var url = '/api/lyrics?title=' + encodeURIComponent(track.title) +
+          '&artist=' + encodeURIComponent(track.artist);
+        var data = await fetchJson(url);
+        found = extractLyrics(data);
+      } catch (e) {
+        found = '';
+      }
+
+      if (found) break;
+
+      if (attempt < LYRICS_ATTEMPTS) {
+        await sleep(600 + attempt * 400);
+        if (token !== lyricsToken) return;
+      }
+    }
+
+    if (token !== lyricsToken) return;
+
+    var cleaned = found ? cleanLyrics(found) : '';
+    lyricsCache[key] = cleaned;
+
+    state.lyrics = cleaned;
+    state.lyricsState = cleaned ? 'ready' : 'none';
+    renderLyrics();
+  }
+
+  /* ------------------------------------------------------------------ */
   /*  Playback core                                                     */
   /* ------------------------------------------------------------------ */
 
@@ -2082,6 +2225,10 @@ export const html = `<!DOCTYPE html>
     renderNowPlaying();
     showMini();
     syncPlayButtons();
+
+    // Lyrics only matter in the expanded player, but we start the lookup
+    // right away so the sheet is ready the moment it is opened.
+    ensureLyrics(track);
 
     if (!ytReady || !yt) {
       state.pendingPlay = track;
@@ -2234,7 +2381,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Sheet (expanded player)                                           */
+  /*  Expanded player                                                   */
   /* ------------------------------------------------------------------ */
 
   function openSheet() {
@@ -2243,7 +2390,9 @@ export const html = `<!DOCTYPE html>
     if (!sheet) return;
     sheet.hidden = false;
     document.body.style.overflow = 'hidden';
+    renderLyrics();
     tickProgress();
+    if (state.lyricsState === 'idle') ensureLyrics(state.current);
   }
 
   function closeSheet() {
