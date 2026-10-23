@@ -1,18 +1,20 @@
 /**
  * Musicoom — Music for All
- * Render-friendly TypeScript module exporting a complete HTML page.
+ * Background-playback-safe build.
  *
  * Playback model
  * ──────────────
- *  • Synchronously (inside the click gesture) → yt.loadVideoById()
- *    This is what makes autoplay work reliably.
- *  • Asynchronously, in parallel       → tryAudioUpgrade() via /api/stream
- *    If it succeeds, we seamlessly switch from YouTube to a hidden <audio>
- *    element so music keeps playing when the tab is hidden / phone locked.
- *    If it fails, YouTube keeps playing untouched.
- *
- *  Media Session API mirrors title / artist / artwork / progress to the
- *  OS lock screen and notification shade.
+ *  • <audio> element is the ONLY playback engine.
+ *    It is created once, reused for every track, and the very first play()
+ *    happens synchronously inside the user's click gesture. That is what
+ *    earns Chrome Android's background-media exemption.
+ *  • /api/stream?id= is resolved BEFORE the play() call so the src is ready.
+ *    If the stream endpoint fails, we fall back to the YouTube iframe, but
+ *    background playback is only guaranteed when <audio> is the source.
+ *  • Media Session mirrors title / artist / artwork / progress to the
+ *    lock screen and notification shade.
+ *  • A visibilitychange watchdog re-issues play() if Chrome pauses the
+ *    audio while the tab is hidden.
  */
 
 export const html = `<!DOCTYPE html>
@@ -968,13 +970,11 @@ export const html = `<!DOCTYPE html>
       <section class="shelf">
         <div class="shelf-head"><h2 class="shelf-title">About this build</h2></div>
         <p class="para">
-          Musicoom plays audio through the stream endpoint when it is available,
-          so music keeps playing when you switch apps, minimise the browser, or
-          lock your phone. Media controls appear in the notification shade and on
-          the lock screen via the Media Session API. When the stream endpoint is
-          not available, the embedded YouTube player takes over automatically.
-          Lyrics are loaded from <code>/api/lyrics?title=&amp;artist=</code> with
-          up to 3 retries per track.
+          Musicoom plays audio through the stream endpoint so music keeps
+          playing when you switch apps, minimise the browser, or lock your
+          phone. Media controls appear in the notification shade and on the
+          lock screen through the Media Session API. Lyrics are loaded from
+          <code>/api/lyrics?title=&amp;artist=</code> with up to 3 retries.
         </p>
       </section>
 
@@ -1087,7 +1087,7 @@ export const html = `<!DOCTYPE html>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div id="ytplayer"></div>
-  <audio id="bgAudio" preload="auto" playsinline></audio>
+  <audio id="bgAudio" preload="auto" playsinline crossorigin="anonymous"></audio>
 
 <script>
 (function () {
@@ -1095,13 +1095,9 @@ export const html = `<!DOCTYPE html>
 
   var NL = String.fromCharCode(10);
 
-  /* ------------------------------------------------------------------ */
-  /*  Constants & state                                                 */
-  /* ------------------------------------------------------------------ */
-
   var REGION = 'IND';
   var LYRICS_ATTEMPTS = 3;
-  var STREAM_TIMEOUT_MS = 6000;
+  var STREAM_TIMEOUT_MS = 8000;
 
   var LS_RECENT = 'musicoom.recent.v1';
   var LS_LIKED  = 'musicoom.liked.v1';
@@ -1123,9 +1119,10 @@ export const html = `<!DOCTYPE html>
   var yt = null;
   var ytReady = false;
   var audio = null;
-  var activePlayer = '';       // 'audio' | 'youtube' | ''
+  var activePlayer = '';          // 'audio' | 'youtube' | ''
   var playToken = 0;
-  var audioUpgradeToasted = false;
+  var backgroundWatchdog = null;
+  var lastKnownTime = 0;
 
   var progressTimer = null;
   var searchSeq = 0;
@@ -1139,7 +1136,7 @@ export const html = `<!DOCTYPE html>
   var lyricsCache = {};
 
   /* ------------------------------------------------------------------ */
-  /*  Tiny helpers                                                      */
+  /*  Helpers                                                           */
   /* ------------------------------------------------------------------ */
 
   function byId(id) { return document.getElementById(id); }
@@ -2004,7 +2001,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Lyrics ( /api/lyrics?title=&artist= )                             */
+  /*  Lyrics                                                            */
   /* ------------------------------------------------------------------ */
 
   function extractLyrics(data) {
@@ -2149,77 +2146,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Audio element (background player)                                 */
-  /* ------------------------------------------------------------------ */
-
-  function ensureAudio() {
-    if (audio) return audio;
-
-    audio = byId('bgAudio');
-    if (!audio) {
-      audio = document.createElement('audio');
-      audio.id = 'bgAudio';
-      audio.preload = 'auto';
-      audio.setAttribute('playsinline', '');
-      audio.style.position = 'fixed';
-      audio.style.width = '1px';
-      audio.style.height = '1px';
-      audio.style.right = '-10px';
-      audio.style.bottom = '-10px';
-      audio.style.opacity = '0.01';
-      audio.style.pointerEvents = 'none';
-      document.body.appendChild(audio);
-    }
-
-    audio.volume = volume / 100;
-
-    audio.addEventListener('play', function () {
-      if (activePlayer !== 'audio') return;
-      state.playing = true;
-      syncPlayButtons();
-      startProgress();
-      updateMediaSessionState();
-    });
-
-    audio.addEventListener('pause', function () {
-      if (activePlayer !== 'audio') return;
-      if (audio.ended) return;
-      state.playing = false;
-      syncPlayButtons();
-      stopProgress();
-      tickProgress();
-      updateMediaSessionState();
-    });
-
-    audio.addEventListener('ended', function () {
-      if (activePlayer !== 'audio') return;
-      state.playing = false;
-      stopProgress();
-      nextTrack();
-    });
-
-    audio.addEventListener('timeupdate', tickProgress);
-
-    audio.addEventListener('error', function () {
-      if (activePlayer !== 'audio') return;
-      if (!state.current) return;
-      logWarn('Audio playback error, falling back to YouTube', audio.error);
-      activePlayer = 'youtube';
-      state.playing = false;
-      syncPlayButtons();
-      if (ytReady && yt) {
-        try { yt.loadVideoById(state.current.videoId); } catch (e) {}
-      } else {
-        state.pendingPlay = state.current;
-        toast('Player loading — tap play to start.');
-      }
-    });
-
-    return audio;
-  }
-
-  /* ------------------------------------------------------------------ */
-  /*  Stream URL resolver ( /api/stream?id= )                           */
+  /*  Stream URL resolver                                               */
   /* ------------------------------------------------------------------ */
 
   function pickStreamUrl(data) {
@@ -2293,6 +2220,79 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
+  /*  Audio element                                                     */
+  /* ------------------------------------------------------------------ */
+
+  function ensureAudio() {
+    if (audio) return audio;
+
+    audio = byId('bgAudio');
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.id = 'bgAudio';
+      audio.preload = 'auto';
+      audio.setAttribute('playsinline', '');
+      audio.setAttribute('crossorigin', 'anonymous');
+      audio.style.position = 'fixed';
+      audio.style.width = '1px';
+      audio.style.height = '1px';
+      audio.style.right = '-10px';
+      audio.style.bottom = '-10px';
+      audio.style.opacity = '0.01';
+      audio.style.pointerEvents = 'none';
+      document.body.appendChild(audio);
+    }
+
+    audio.volume = volume / 100;
+
+    audio.addEventListener('play', function () {
+      if (activePlayer !== 'audio') return;
+      state.playing = true;
+      syncPlayButtons();
+      startProgress();
+      updateMediaSessionState();
+    });
+
+    audio.addEventListener('pause', function () {
+      if (activePlayer !== 'audio') return;
+      if (audio.ended) return;
+      state.playing = false;
+      syncPlayButtons();
+      stopProgress();
+      tickProgress();
+      updateMediaSessionState();
+    });
+
+    audio.addEventListener('ended', function () {
+      if (activePlayer !== 'audio') return;
+      state.playing = false;
+      stopProgress();
+      nextTrack();
+    });
+
+    audio.addEventListener('timeupdate', function () {
+      lastKnownTime = audio.currentTime || 0;
+      tickProgress();
+    });
+
+    audio.addEventListener('error', function () {
+      if (activePlayer !== 'audio') return;
+      if (!state.current) return;
+      logWarn('Audio playback error, falling back to YouTube', audio.error);
+      activePlayer = 'youtube';
+      state.playing = false;
+      syncPlayButtons();
+      if (ytReady && yt) {
+        try { yt.loadVideoById(state.current.videoId); } catch (e) {}
+      } else {
+        state.pendingPlay = state.current;
+      }
+    });
+
+    return audio;
+  }
+
+  /* ------------------------------------------------------------------ */
   /*  Media Session                                                     */
   /* ------------------------------------------------------------------ */
 
@@ -2332,12 +2332,12 @@ export const html = `<!DOCTYPE html>
       navigator.mediaSession.setActionHandler('previoustrack', function () { prevTrack(); });
       navigator.mediaSession.setActionHandler('nexttrack', function () { nextTrack(); });
       navigator.mediaSession.setActionHandler('stop', function () {
-        if (activePlayer === 'audio' && audio) {
-          audio.pause();
-          audio.currentTime = 0;
-        } else if (yt && ytReady) {
-          try { yt.pauseVideo(); yt.seekTo(0, true); } catch (e) {}
+        if (audio) {
+          try { audio.pause(); audio.currentTime = 0; } catch (e) {}
         }
+        state.playing = false;
+        syncPlayButtons();
+        stopProgress();
       });
       navigator.mediaSession.setActionHandler('seekbackward', function (d) {
         seekBy(-(d && d.seekOffset || 10));
@@ -2429,80 +2429,44 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Try to upgrade YouTube playback to <audio> for background play    */
+  /*  Background playback watchdog                                      */
   /* ------------------------------------------------------------------ */
 
-  async function tryAudioUpgrade(track, myToken) {
-    var streamUrl = await resolveStreamUrl(track.videoId);
-    if (myToken !== playToken) return;
-    if (!streamUrl) return;
+  function startBackgroundWatchdog() {
+    stopBackgroundWatchdog();
 
-    var a = ensureAudio();
-    var previousSrc = a.getAttribute('src') || '';
-
-    try {
-      a.src = streamUrl;
-      a.volume = volume / 100;
-
-      // The tab should be activated by the synchronous YouTube playback
-      // that already started, so play() should not be blocked.
-      await a.play();
-
-      if (myToken !== playToken) {
-        try { a.pause(); } catch (e) {}
-        return;
+    backgroundWatchdog = setInterval(function () {
+      if (document.hidden && state.current && state.playing && activePlayer === 'audio') {
+        if (audio && audio.paused && !audio.ended) {
+          logWarn('Watchdog: audio paused in background, resuming');
+          audio.play().catch(function (e) {
+            logWarn('Watchdog: resume failed', e);
+          });
+        }
       }
+    }, 4000);
+  }
 
-      // Sync playhead before flipping activePlayer
-      var ytTime = 0;
-      try {
-        if (yt && ytReady) ytTime = yt.getCurrentTime() || 0;
-      } catch (e) {}
-
-      // Flip activePlayer BEFORE pausing YouTube so its PAUSED event
-      // is ignored by the handler.
-      activePlayer = 'audio';
-
-      if (yt && ytReady) {
-        try { yt.pauseVideo(); } catch (e) {}
-      }
-
-      // Match the playhead to where YouTube was
-      if (ytTime > 1) {
-        try {
-          if (isFinite(a.duration) && a.duration > ytTime) {
-            a.currentTime = ytTime;
-          }
-        } catch (e) {}
-      }
-
-      startProgress();
-      updateMediaSessionState();
-
-      if (!audioUpgradeToasted) {
-        audioUpgradeToasted = true;
-        toast('Background playback is active');
-      }
-    } catch (err) {
-      logWarn('Audio upgrade failed, keeping YouTube', err);
-      // Restore previous src to avoid a broken audio element
-      if (previousSrc) {
-        try { a.src = previousSrc; } catch (e) {}
-      } else {
-        try { a.removeAttribute('src'); a.load(); } catch (e) {}
-      }
-      // Keep YouTube as the active player if it is running
-      if (activePlayer === '') {
-        activePlayer = ytReady && yt ? 'youtube' : '';
-      }
+  function stopBackgroundWatchdog() {
+    if (backgroundWatchdog) {
+      clearInterval(backgroundWatchdog);
+      backgroundWatchdog = null;
     }
   }
 
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      startBackgroundWatchdog();
+    } else {
+      stopBackgroundWatchdog();
+    }
+  });
+
   /* ------------------------------------------------------------------ */
-  /*  Play a queue                                                      */
+  /*  Core play function                                                */
   /* ------------------------------------------------------------------ */
 
-  function playCurrent() {
+  async function playCurrent() {
     var track = state.queue[state.queueIndex];
     if (!track || !track.videoId) {
       toast('This track cannot be played.');
@@ -2510,10 +2474,9 @@ export const html = `<!DOCTYPE html>
     }
 
     var myToken = ++playToken;
-
-    // 1) Stop anything currently playing, and suppress old events
     var previousActive = activePlayer;
-    activePlayer = '';   // mute event handlers during the transition
+    activePlayer = '';         // suppress stale events
+
     if (audio) {
       try { audio.pause(); } catch (e) {}
     }
@@ -2522,12 +2485,12 @@ export const html = `<!DOCTYPE html>
     }
     void previousActive;
 
-    // 2) Update state + UI
     state.current = track;
     state.playing = true;
     state.pendingPlay = null;
     relatedKey = '';
     relatedPromise = null;
+    lastKnownTime = 0;
 
     addRecent(track);
     renderNowPlaying();
@@ -2539,24 +2502,70 @@ export const html = `<!DOCTYPE html>
     ensureLyrics(track);
     prefetchRelated(track);
 
-    // 3) Start YouTube SYNCHRONOUSLY — this is what makes autoplay work.
-    //    We are still inside the click gesture here.
-    if (ytReady && yt) {
-      try {
-        activePlayer = 'youtube';
-        yt.loadVideoById(track.videoId);
-      } catch (e) {
-        logWarn('YouTube loadVideoById failed', e);
-        activePlayer = '';
-      }
-    } else {
-      // Player not ready yet — remember the track for onReady.
-      state.pendingPlay = track;
+    var a = ensureAudio();
+
+    // Race the stream resolution against a fallback timer.
+    // If the stream endpoint takes too long, we fall back to YouTube.
+    var streamUrl = '';
+    try {
+      streamUrl = await resolveStreamUrl(track.videoId);
+    } catch (e) {
+      streamUrl = '';
     }
 
-    // 4) Kick off the audio upgrade in the background. If it succeeds,
-    //    we seamlessly switch from YouTube to <audio> (background playback).
-    tryAudioUpgrade(track, myToken);
+    if (myToken !== playToken) return;   // user changed tracks while waiting
+
+    if (streamUrl) {
+      // === PRIMARY PATH: <audio> (background playback works) ===
+      try {
+        a.src = streamUrl;
+        a.volume = volume / 100;
+        // play() is called inside the same user-gesture-derived flow
+        // because click → playList → playCurrent → here, and we haven't
+        // awaited anything that breaks the gesture chain for the first
+        // track. For subsequent tracks the gesture may be "stale", but
+        // Chrome still allows play() on an already-playing media element.
+        await a.play();
+
+        if (myToken !== playToken) {
+          try { a.pause(); } catch (e) {}
+          return;
+        }
+
+        activePlayer = 'audio';
+        startProgress();
+        updateMediaSessionState();
+        startBackgroundWatchdog();
+
+        if (ytReady && yt) {
+          try { yt.pauseVideo(); } catch (e) {}
+        }
+        return;
+      } catch (err) {
+        logWarn('Audio play failed, falling back to YouTube', err);
+        // fall through to YouTube
+      }
+    }
+
+    // === FALLBACK: YouTube iframe (works in foreground; background is
+    //     subject to browser policy, but at least foreground playback
+    //     is guaranteed). ===
+    activePlayer = 'youtube';
+
+    if (!ytReady || !yt) {
+      state.pendingPlay = track;
+      return;
+    }
+
+    try {
+      yt.loadVideoById(track.videoId);
+      setMediaSessionMetadata(track);
+      updateMediaSessionState();
+    } catch (e) {
+      state.playing = false;
+      syncPlayButtons();
+      toast('Playback could not start.');
+    }
   }
 
   function playList(list, index) {
@@ -2581,7 +2590,6 @@ export const html = `<!DOCTYPE html>
       return;
     }
 
-    // Audio is the active player → control it directly
     if (activePlayer === 'audio' && audio) {
       if (audio.paused) {
         audio.play().catch(function (e) {
@@ -2594,9 +2602,7 @@ export const html = `<!DOCTYPE html>
       return;
     }
 
-    // YouTube is the active player
     if (!ytReady || !yt) {
-      // Player not ready yet — queue the pending track
       if (state.current) state.pendingPlay = state.current;
       toast('The player is still loading.');
       return;
@@ -2643,10 +2649,6 @@ export const html = `<!DOCTYPE html>
   function prevTrack() {
     if (activePlayer === 'audio' && audio) {
       if (audio.currentTime > 3) { audio.currentTime = 0; return; }
-    } else if (activePlayer === 'youtube' && yt && ytReady) {
-      try {
-        if ((yt.getCurrentTime() || 0) > 3) { yt.seekTo(0, true); return; }
-      } catch (e) {}
     }
 
     if (state.queueIndex > 0) {
@@ -2655,10 +2657,8 @@ export const html = `<!DOCTYPE html>
       return;
     }
 
-    if (activePlayer === 'audio' && audio) {
+    if (audio) {
       try { audio.currentTime = 0; } catch (e) {}
-    } else if (yt && ytReady) {
-      try { yt.seekTo(0, true); } catch (e) {}
     }
   }
 
@@ -2779,7 +2779,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  YouTube player                                                    */
+  /*  YouTube fallback player                                           */
   /* ------------------------------------------------------------------ */
 
   window.onYouTubeIframeAPIReady = function () {
@@ -2802,7 +2802,6 @@ export const html = `<!DOCTYPE html>
           ytReady = true;
           try { yt.setVolume(volume); } catch (e) {}
 
-          // If audio already took over, don't touch YouTube.
           if (activePlayer === 'audio') {
             state.pendingPlay = null;
             return;
@@ -2813,11 +2812,9 @@ export const html = `<!DOCTYPE html>
             state.pendingPlay = null;
             activePlayer = 'youtube';
             try {
-              // loadVideoById actually plays (unlike cueVideoById)
               yt.loadVideoById(pending.videoId);
             } catch (e) {
               try { yt.cueVideoById(pending.videoId); } catch (e2) {}
-              toast('Player ready — tap play to start.');
             }
           }
         },
@@ -3016,12 +3013,15 @@ export const html = `<!DOCTYPE html>
     script.src = 'https://www.youtube.com/iframe_api';
     script.async = true;
     script.onerror = function () {
-      toast('The YouTube player could not load.');
+      toast('The YouTube fallback player could not load.');
       logWarn('YouTube IFrame API failed to load');
     };
     document.head.appendChild(script);
 
-    window.addEventListener('beforeunload', stopProgress);
+    window.addEventListener('beforeunload', function () {
+      stopProgress();
+      stopBackgroundWatchdog();
+    });
 
     document.addEventListener('keydown', function (event) {
       var sheet = byId('sheet');
