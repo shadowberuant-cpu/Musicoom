@@ -1,20 +1,16 @@
 /**
  * Musicoom — Music for All
- * Background-playback-safe build.
  *
  * Playback model
  * ──────────────
- *  • <audio> element is the ONLY playback engine.
- *    It is created once, reused for every track, and the very first play()
- *    happens synchronously inside the user's click gesture. That is what
- *    earns Chrome Android's background-media exemption.
- *  • /api/stream?id= is resolved BEFORE the play() call so the src is ready.
- *    If the stream endpoint fails, we fall back to the YouTube iframe, but
- *    background playback is only guaranteed when <audio> is the source.
- *  • Media Session mirrors title / artist / artwork / progress to the
- *    lock screen and notification shade.
- *  • A visibilitychange watchdog re-issues play() if Chrome pauses the
- *    audio while the tab is hidden.
+ *  1. Click a track → playCurrent() runs SYNCHRONOUSLY:
+ *       yt.loadVideoById(videoId)   ← starts immediately, autoplay-safe
+ *  2. In parallel, tryAudioUpgrade() fetches /api/stream?id= and, if
+ *     a real audio URL comes back and audio.play() succeeds, we switch
+ *     activePlayer to 'audio' — which is what enables background playback
+ *     and Media Session lock-screen controls on Chrome Android / iOS.
+ *  3. If /api/stream is missing, audio.play() fails, or CORS blocks it,
+ *     YouTube keeps playing untouched. Foreground playback always works.
  */
 
 export const html = `<!DOCTYPE html>
@@ -86,8 +82,6 @@ export const html = `<!DOCTYPE html>
       radial-gradient(700px 500px at 50% 110%, rgba(34, 211, 238, .07), transparent 65%);
   }
 
-  /* ---------------- Topbar ---------------- */
-
   .topbar {
     position: sticky;
     top: 0;
@@ -153,8 +147,6 @@ export const html = `<!DOCTYPE html>
   .icon-btn:hover { border-color: var(--accent-line); color: var(--accent); }
   .icon-btn.liked { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
 
-  /* ---------------- Main ---------------- */
-
   .main {
     position: relative;
     z-index: 1;
@@ -185,8 +177,6 @@ export const html = `<!DOCTYPE html>
     margin-bottom: 8px;
   }
   .para { color: var(--muted); font-size: .82rem; line-height: 1.65; margin-top: 8px; }
-
-  /* ---------------- Shelves ---------------- */
 
   .shelf { margin-top: 26px; }
   .shelf-head {
@@ -249,8 +239,6 @@ export const html = `<!DOCTYPE html>
     text-overflow: ellipsis;
   }
 
-  /* ---------------- Rows ---------------- */
-
   .rows { display: flex; flex-direction: column; gap: 2px; }
 
   .row {
@@ -305,8 +293,6 @@ export const html = `<!DOCTYPE html>
     font-variant-numeric: tabular-nums;
   }
 
-  /* ---------------- Search ---------------- */
-
   .search-bar {
     display: flex;
     align-items: center;
@@ -344,8 +330,6 @@ export const html = `<!DOCTYPE html>
     transition: .18s ease;
   }
   .chip.active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
-
-  /* ---------------- Detail ---------------- */
 
   .detail-head { display: flex; gap: 16px; align-items: flex-end; margin-bottom: 22px; }
   .detail-art {
@@ -387,8 +371,6 @@ export const html = `<!DOCTYPE html>
   }
   .btn-ghost:hover { border-color: var(--border-2); }
 
-  /* ---------------- Footer nav ---------------- */
-
   .bottom-nav {
     position: fixed;
     z-index: 60;
@@ -422,8 +404,6 @@ export const html = `<!DOCTYPE html>
   .nav-item:hover { color: var(--muted); }
   .nav-item.active { color: var(--accent); }
   .nav-item.active .ic { filter: drop-shadow(0 0 9px rgba(34, 211, 238, .5)); }
-
-  /* ---------------- Mini player ---------------- */
 
   .mini {
     position: fixed;
@@ -513,8 +493,6 @@ export const html = `<!DOCTYPE html>
     background: var(--accent);
     transition: width .3s linear;
   }
-
-  /* ---------------- Expanded player ---------------- */
 
   .sheet {
     position: fixed;
@@ -660,8 +638,6 @@ export const html = `<!DOCTYPE html>
   .sheet-volume { display: flex; align-items: center; gap: 12px; margin-top: 20px; color: var(--dim); }
   .sheet-volume input { flex: 1; accent-color: var(--accent); height: 4px; }
 
-  /* ---------------- Lyrics ---------------- */
-
   .lyrics-block {
     margin-top: 22px;
     padding-top: 18px;
@@ -698,8 +674,6 @@ export const html = `<!DOCTYPE html>
   .lyrics-body::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 999px; }
   .lyrics-body.loading-lyrics { color: var(--accent); }
   .lyrics-body.empty-lyrics { color: var(--muted); }
-
-  /* ---------------- Misc ---------------- */
 
   .empty, .loading {
     padding: 26px 12px;
@@ -776,8 +750,6 @@ export const html = `<!DOCTYPE html>
   .stat b { display: block; font-size: 1.4rem; font-weight: 800; color: var(--accent); letter-spacing: -1px; }
   .stat span { display: block; margin-top: 4px; font-size: .74rem; color: var(--muted); }
 
-  /* ---------------- Desktop ---------------- */
-
   @media (min-width: 900px) {
     .main { padding: 30px 32px calc(var(--nav-h) + 200px + env(safe-area-inset-bottom)); }
     .card, .card-art { width: 152px; }
@@ -819,7 +791,6 @@ export const html = `<!DOCTYPE html>
 <body>
   <div class="glow"></div>
 
-  <!-- SVG icon sprite -->
   <svg class="sprite" aria-hidden="true" focusable="false">
     <symbol id="i-home" viewBox="0 0 24 24">
       <path d="M3.2 10.4 12 3.2l8.8 7.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -876,7 +847,6 @@ export const html = `<!DOCTYPE html>
     </symbol>
   </svg>
 
-  <!-- Topbar: logo left, search right -->
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">
@@ -895,7 +865,6 @@ export const html = `<!DOCTYPE html>
   </header>
 
   <main class="main">
-    <!-- HOME -->
     <section id="homeView" class="view">
       <p class="eyebrow">Music for All · India</p>
       <h1 class="h1">Good vibes,<br><em>India</em></h1>
@@ -930,7 +899,6 @@ export const html = `<!DOCTYPE html>
       </section>
     </section>
 
-    <!-- SEARCH -->
     <section id="searchView" class="view" hidden>
       <h1 class="h1" style="margin-bottom:14px">Search</h1>
       <div class="search-bar">
@@ -948,10 +916,8 @@ export const html = `<!DOCTYPE html>
       </div>
     </section>
 
-    <!-- LIBRARY -->
     <section id="libraryView" class="view" hidden></section>
 
-    <!-- PROFILE -->
     <section id="profileView" class="view" hidden>
       <p class="eyebrow">Account</p>
       <div class="profile-card">
@@ -968,14 +934,8 @@ export const html = `<!DOCTYPE html>
       </div>
 
       <section class="shelf">
-        <div class="shelf-head"><h2 class="shelf-title">About this build</h2></div>
-        <p class="para">
-          Musicoom plays audio through the stream endpoint so music keeps
-          playing when you switch apps, minimise the browser, or lock your
-          phone. Media controls appear in the notification shade and on the
-          lock screen through the Media Session API. Lyrics are loaded from
-          <code>/api/lyrics?title=&amp;artist=</code> with up to 3 retries.
-        </p>
+        <div class="shelf-head"><h2 class="shelf-title">Playback status</h2></div>
+        <p class="para" id="statusText">Checking…</p>
       </section>
 
       <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">
@@ -984,11 +944,9 @@ export const html = `<!DOCTYPE html>
       </div>
     </section>
 
-    <!-- DETAIL -->
     <section id="detailView" class="view" hidden></section>
   </main>
 
-  <!-- Mini player -->
   <div class="mini" id="mini" hidden>
     <button class="mini-main" id="miniOpen" type="button" aria-label="Open player">
       <img class="mini-art" id="miniArt" alt="">
@@ -1006,7 +964,6 @@ export const html = `<!DOCTYPE html>
     <span class="mini-progress"><i id="miniFill"></i></span>
   </div>
 
-  <!-- Footer nav -->
   <nav class="bottom-nav" aria-label="Main navigation">
     <div class="bottom-nav-inner">
       <button class="nav-item active" data-view="home" type="button">
@@ -1024,7 +981,6 @@ export const html = `<!DOCTYPE html>
     </div>
   </nav>
 
-  <!-- Expanded player + lyrics -->
   <div class="sheet" id="sheet" hidden>
     <img class="sheet-bg" id="sheetBg" alt="">
     <div class="sheet-shade"></div>
@@ -1087,17 +1043,17 @@ export const html = `<!DOCTYPE html>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div id="ytplayer"></div>
-  <audio id="bgAudio" preload="auto" playsinline crossorigin="anonymous"></audio>
+  <audio id="bgAudio" preload="auto" playsinline></audio>
 
 <script>
 (function () {
   'use strict';
 
   var NL = String.fromCharCode(10);
-
   var REGION = 'IND';
   var LYRICS_ATTEMPTS = 3;
-  var STREAM_TIMEOUT_MS = 8000;
+  var STREAM_TIMEOUT_MS = 6000;
+  var SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 
   var LS_RECENT = 'musicoom.recent.v1';
   var LS_LIKED  = 'musicoom.liked.v1';
@@ -1119,10 +1075,11 @@ export const html = `<!DOCTYPE html>
   var yt = null;
   var ytReady = false;
   var audio = null;
-  var activePlayer = '';          // 'audio' | 'youtube' | ''
+  var activePlayer = '';
   var playToken = 0;
-  var backgroundWatchdog = null;
-  var lastKnownTime = 0;
+
+  var streamEndpointStatus = 'unknown';
+  var audioPrimed = false;
 
   var progressTimer = null;
   var searchSeq = 0;
@@ -1170,6 +1127,13 @@ export const html = `<!DOCTYPE html>
   function capitalize(text) {
     text = String(text || '');
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+  }
+
+  function logInfo(label, data) {
+    try {
+      if (data === undefined) console.log('[Musicoom] ' + label);
+      else console.log('[Musicoom] ' + label, data);
+    } catch (e) {}
   }
 
   function logWarn(label, error) {
@@ -1998,6 +1962,21 @@ export const html = `<!DOCTYPE html>
     var b = byId('statLiked');
     if (a) a.textContent = String(readStore(LS_RECENT).length);
     if (b) b.textContent = String(readStore(LS_LIKED).length);
+
+    var status = byId('statusText');
+    if (status) {
+      var streamMsg = streamEndpointStatus === 'missing'
+        ? 'Stream endpoint not available — using YouTube (foreground playback only)'
+        : streamEndpointStatus === 'working'
+          ? 'Stream endpoint working — background playback enabled'
+          : 'Stream endpoint not yet tested';
+      var activeMsg = activePlayer === 'audio'
+        ? 'Currently playing via audio stream'
+        : activePlayer === 'youtube'
+          ? 'Currently playing via YouTube'
+          : 'Nothing currently playing';
+      status.textContent = streamMsg + '. ' + activeMsg + '.';
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -2189,6 +2168,8 @@ export const html = `<!DOCTYPE html>
 
   async function resolveStreamUrl(videoId) {
     if (!videoId) return '';
+    if (streamEndpointStatus === 'missing') return '';
+
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, STREAM_TIMEOUT_MS);
 
@@ -2199,11 +2180,18 @@ export const html = `<!DOCTYPE html>
         signal: controller.signal
       });
       clearTimeout(timer);
+
+      if (res.status === 404) {
+        streamEndpointStatus = 'missing';
+        logWarn('Stream endpoint returned 404 — background playback unavailable');
+        return '';
+      }
       if (!res.ok) return '';
 
       var ct = (res.headers.get('content-type') || '').toLowerCase();
       if (ct.indexOf('audio/') === 0 || ct.indexOf('video/') === 0 ||
           ct.indexOf('application/octet-stream') === 0) {
+        streamEndpointStatus = 'working';
         return forceHttps(res.url);
       }
 
@@ -2211,10 +2199,14 @@ export const html = `<!DOCTYPE html>
       var data;
       try { data = text ? JSON.parse(text) : {}; } catch (e) { return ''; }
 
-      return forceHttps(pickStreamUrl(data));
+      var url = forceHttps(pickStreamUrl(data));
+      if (url) streamEndpointStatus = 'working';
+      return url;
     } catch (e) {
       clearTimeout(timer);
-      logWarn('resolveStreamUrl failed', e);
+      if (e && e.name === 'AbortError') {
+        logWarn('Stream endpoint timed out');
+      }
       return '';
     }
   }
@@ -2232,7 +2224,6 @@ export const html = `<!DOCTYPE html>
       audio.id = 'bgAudio';
       audio.preload = 'auto';
       audio.setAttribute('playsinline', '');
-      audio.setAttribute('crossorigin', 'anonymous');
       audio.style.position = 'fixed';
       audio.style.width = '1px';
       audio.style.height = '1px';
@@ -2270,15 +2261,12 @@ export const html = `<!DOCTYPE html>
       nextTrack();
     });
 
-    audio.addEventListener('timeupdate', function () {
-      lastKnownTime = audio.currentTime || 0;
-      tickProgress();
-    });
+    audio.addEventListener('timeupdate', tickProgress);
 
     audio.addEventListener('error', function () {
       if (activePlayer !== 'audio') return;
       if (!state.current) return;
-      logWarn('Audio playback error, falling back to YouTube', audio.error);
+      logWarn('Audio stream error, falling back to YouTube', audio.error);
       activePlayer = 'youtube';
       state.playing = false;
       syncPlayButtons();
@@ -2290,6 +2278,40 @@ export const html = `<!DOCTYPE html>
     });
 
     return audio;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Prime audio on first user gesture                                 */
+  /* ------------------------------------------------------------------ */
+
+  function primeAudioOnce() {
+    if (audioPrimed) return;
+    audioPrimed = true;
+    try {
+      var a = ensureAudio();
+      if (a.src && a.src !== '' && a.src.indexOf('data:') !== 0) {
+        // A real track is already loaded; nothing to prime.
+        return;
+      }
+      var prevVolume = a.volume;
+      a.src = SILENT_WAV;
+      a.volume = 0;
+      var p = a.play();
+      if (p && p.then) {
+        p.then(function () {
+          // Only reset if the src is still our prime (no real track yet)
+          if (a.src === SILENT_WAV || a.src.indexOf(SILENT_WAV) === 0) {
+            try { a.pause(); } catch (e) {}
+            try { a.removeAttribute('src'); a.load(); } catch (e) {}
+            a.volume = prevVolume;
+          }
+        }).catch(function (err) {
+          logWarn('Audio prime failed (continuing anyway)', err && err.name);
+        });
+      }
+    } catch (e) {
+      logWarn('Prime exception', e);
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -2332,9 +2354,8 @@ export const html = `<!DOCTYPE html>
       navigator.mediaSession.setActionHandler('previoustrack', function () { prevTrack(); });
       navigator.mediaSession.setActionHandler('nexttrack', function () { nextTrack(); });
       navigator.mediaSession.setActionHandler('stop', function () {
-        if (audio) {
-          try { audio.pause(); audio.currentTime = 0; } catch (e) {}
-        }
+        if (audio) { try { audio.pause(); audio.currentTime = 0; } catch (e) {} }
+        if (ytReady && yt) { try { yt.pauseVideo(); yt.seekTo(0, true); } catch (e) {} }
         state.playing = false;
         syncPlayButtons();
         stopProgress();
@@ -2354,7 +2375,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Playback                                                          */
+  /*  Playback core                                                     */
   /* ------------------------------------------------------------------ */
 
   function syncPlayButtons() {
@@ -2429,44 +2450,10 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Background playback watchdog                                      */
+  /*  playCurrent (SYNCHRONOUS start)                                   */
   /* ------------------------------------------------------------------ */
 
-  function startBackgroundWatchdog() {
-    stopBackgroundWatchdog();
-
-    backgroundWatchdog = setInterval(function () {
-      if (document.hidden && state.current && state.playing && activePlayer === 'audio') {
-        if (audio && audio.paused && !audio.ended) {
-          logWarn('Watchdog: audio paused in background, resuming');
-          audio.play().catch(function (e) {
-            logWarn('Watchdog: resume failed', e);
-          });
-        }
-      }
-    }, 4000);
-  }
-
-  function stopBackgroundWatchdog() {
-    if (backgroundWatchdog) {
-      clearInterval(backgroundWatchdog);
-      backgroundWatchdog = null;
-    }
-  }
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) {
-      startBackgroundWatchdog();
-    } else {
-      stopBackgroundWatchdog();
-    }
-  });
-
-  /* ------------------------------------------------------------------ */
-  /*  Core play function                                                */
-  /* ------------------------------------------------------------------ */
-
-  async function playCurrent() {
+  function playCurrent() {
     var track = state.queue[state.queueIndex];
     if (!track || !track.videoId) {
       toast('This track cannot be played.');
@@ -2474,24 +2461,20 @@ export const html = `<!DOCTYPE html>
     }
 
     var myToken = ++playToken;
-    var previousActive = activePlayer;
-    activePlayer = '';         // suppress stale events
 
-    if (audio) {
-      try { audio.pause(); } catch (e) {}
-    }
-    if (ytReady && yt) {
-      try { yt.pauseVideo(); } catch (e) {}
-    }
-    void previousActive;
+    // Stop old players first, suppress stale events
+    activePlayer = '';
+    if (audio) { try { audio.pause(); } catch (e) {} }
+    if (ytReady && yt) { try { yt.pauseVideo(); } catch (e) {} }
 
+    // State
     state.current = track;
     state.playing = true;
     state.pendingPlay = null;
     relatedKey = '';
     relatedPromise = null;
-    lastKnownTime = 0;
 
+    // UI
     addRecent(track);
     renderNowPlaying();
     showMini();
@@ -2502,69 +2485,78 @@ export const html = `<!DOCTYPE html>
     ensureLyrics(track);
     prefetchRelated(track);
 
-    var a = ensureAudio();
-
-    // Race the stream resolution against a fallback timer.
-    // If the stream endpoint takes too long, we fall back to YouTube.
-    var streamUrl = '';
-    try {
-      streamUrl = await resolveStreamUrl(track.videoId);
-    } catch (e) {
-      streamUrl = '';
-    }
-
-    if (myToken !== playToken) return;   // user changed tracks while waiting
-
-    if (streamUrl) {
-      // === PRIMARY PATH: <audio> (background playback works) ===
+    // === SYNCHRONOUS START — must happen inside the click handler ===
+    if (ytReady && yt) {
       try {
-        a.src = streamUrl;
-        a.volume = volume / 100;
-        // play() is called inside the same user-gesture-derived flow
-        // because click → playList → playCurrent → here, and we haven't
-        // awaited anything that breaks the gesture chain for the first
-        // track. For subsequent tracks the gesture may be "stale", but
-        // Chrome still allows play() on an already-playing media element.
-        await a.play();
-
-        if (myToken !== playToken) {
-          try { a.pause(); } catch (e) {}
-          return;
-        }
-
-        activePlayer = 'audio';
-        startProgress();
-        updateMediaSessionState();
-        startBackgroundWatchdog();
-
-        if (ytReady && yt) {
-          try { yt.pauseVideo(); } catch (e) {}
-        }
-        return;
-      } catch (err) {
-        logWarn('Audio play failed, falling back to YouTube', err);
-        // fall through to YouTube
+        activePlayer = 'youtube';
+        yt.loadVideoById(track.videoId);
+        logInfo('YouTube started: ' + track.videoId);
+      } catch (e) {
+        logWarn('YouTube loadVideoById threw', e);
+        activePlayer = '';
       }
+    } else {
+      state.pendingPlay = track;
+      logInfo('YouTube not ready, queued: ' + track.videoId);
     }
 
-    // === FALLBACK: YouTube iframe (works in foreground; background is
-    //     subject to browser policy, but at least foreground playback
-    //     is guaranteed). ===
-    activePlayer = 'youtube';
+    // === ASYNC audio upgrade in the background ===
+    tryAudioUpgrade(track, myToken);
+  }
 
-    if (!ytReady || !yt) {
-      state.pendingPlay = track;
+  async function tryAudioUpgrade(track, myToken) {
+    var streamUrl = await resolveStreamUrl(track.videoId);
+    if (myToken !== playToken) return;
+    if (!streamUrl) {
+      logInfo('No stream URL — keeping YouTube playback');
       return;
     }
 
+    var a = ensureAudio();
     try {
-      yt.loadVideoById(track.videoId);
-      setMediaSessionMetadata(track);
+      a.src = streamUrl;
+      a.volume = volume / 100;
+      try { a.load(); } catch (e) {}
+
+      await a.play();
+
+      if (myToken !== playToken) {
+        try { a.pause(); } catch (e) {}
+        return;
+      }
+
+      // Sync playhead from YouTube BEFORE pausing it
+      var ytTime = 0;
+      try {
+        if (yt && ytReady) ytTime = yt.getCurrentTime() || 0;
+      } catch (e) {}
+
+      // Flip activePlayer FIRST, so YouTube's PAUSED event is ignored
+      activePlayer = 'audio';
+      if (yt && ytReady) {
+        try { yt.pauseVideo(); } catch (e) {
+          try { yt.stopVideo(); } catch (e2) {}
+        }
+      }
+
+      if (ytTime > 1) {
+        try {
+          if (isFinite(a.duration) && a.duration > ytTime) {
+            a.currentTime = ytTime;
+          }
+        } catch (e) {}
+      }
+
+      startProgress();
       updateMediaSessionState();
-    } catch (e) {
-      state.playing = false;
-      syncPlayButtons();
-      toast('Playback could not start.');
+      logInfo('Switched to audio stream — background playback active');
+      toast('Background playback enabled');
+    } catch (err) {
+      logWarn('Audio upgrade failed (' + (err && err.name) + ') — keeping YouTube', err);
+      // Restore video state just in case
+      if (activePlayer === '') {
+        activePlayer = ytReady && yt ? 'youtube' : '';
+      }
     }
   }
 
@@ -2649,6 +2641,10 @@ export const html = `<!DOCTYPE html>
   function prevTrack() {
     if (activePlayer === 'audio' && audio) {
       if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    } else if (activePlayer === 'youtube' && yt && ytReady) {
+      try {
+        if ((yt.getCurrentTime() || 0) > 3) { yt.seekTo(0, true); return; }
+      } catch (e) {}
     }
 
     if (state.queueIndex > 0) {
@@ -2657,8 +2653,10 @@ export const html = `<!DOCTYPE html>
       return;
     }
 
-    if (audio) {
+    if (activePlayer === 'audio' && audio) {
       try { audio.currentTime = 0; } catch (e) {}
+    } else if (yt && ytReady) {
+      try { yt.seekTo(0, true); } catch (e) {}
     }
   }
 
@@ -2779,7 +2777,7 @@ export const html = `<!DOCTYPE html>
   }
 
   /* ------------------------------------------------------------------ */
-  /*  YouTube fallback player                                           */
+  /*  YouTube player                                                    */
   /* ------------------------------------------------------------------ */
 
   window.onYouTubeIframeAPIReady = function () {
@@ -2801,6 +2799,7 @@ export const html = `<!DOCTYPE html>
         onReady: function () {
           ytReady = true;
           try { yt.setVolume(volume); } catch (e) {}
+          logInfo('YouTube player ready');
 
           if (activePlayer === 'audio') {
             state.pendingPlay = null;
@@ -2815,6 +2814,7 @@ export const html = `<!DOCTYPE html>
               yt.loadVideoById(pending.videoId);
             } catch (e) {
               try { yt.cueVideoById(pending.videoId); } catch (e2) {}
+              toast('Player ready — tap play to start.');
             }
           }
         },
@@ -2840,6 +2840,13 @@ export const html = `<!DOCTYPE html>
             nextTrack();
           } else if (event.data === YTS.BUFFERING) {
             startProgress();
+          } else if (event.data === YTS.CUED) {
+            // Autoplay was blocked → tell the user
+            state.playing = false;
+            syncPlayButtons();
+            stopProgress();
+            logWarn('YouTube cued but not playing — autoplay blocked');
+            toast('Tap play to start playback');
           }
         },
         onError: async function (event) {
@@ -2849,6 +2856,7 @@ export const html = `<!DOCTYPE html>
           state.playing = false;
           stopProgress();
           syncPlayButtons();
+          logWarn('YouTube player error: ' + code);
 
           if (!track) return;
 
@@ -2973,12 +2981,8 @@ export const html = `<!DOCTYPE html>
     if (vol) {
       vol.addEventListener('input', function () {
         volume = Number(this.value);
-        if (audio) {
-          try { audio.volume = volume / 100; } catch (e) {}
-        }
-        if (yt && ytReady) {
-          try { yt.setVolume(volume); } catch (e) {}
-        }
+        if (audio) { try { audio.volume = volume / 100; } catch (e) {} }
+        if (yt && ytReady) { try { yt.setVolume(volume); } catch (e) {} }
       });
     }
 
@@ -3005,6 +3009,12 @@ export const html = `<!DOCTYPE html>
     wirePlayer();
     wireMediaSession();
 
+    // Prime audio element on the very first tap/click.
+    // Capture phase runs before button click handlers, so the audio
+    // element is activated before the first track tries to play.
+    document.addEventListener('click', primeAudioOnce, { capture: true, once: true });
+    document.addEventListener('touchstart', primeAudioOnce, { capture: true, once: true, passive: true });
+
     loadTrending();
     loadArtists();
     loadAlbums();
@@ -3018,10 +3028,7 @@ export const html = `<!DOCTYPE html>
     };
     document.head.appendChild(script);
 
-    window.addEventListener('beforeunload', function () {
-      stopProgress();
-      stopBackgroundWatchdog();
-    });
+    window.addEventListener('beforeunload', stopProgress);
 
     document.addEventListener('keydown', function (event) {
       var sheet = byId('sheet');
@@ -3043,8 +3050,12 @@ export const html = `<!DOCTYPE html>
         if (input) { input.value = q; goSearch(); runSearch(); }
       },
       _resolveStreamUrl: resolveStreamUrl,
-      _activePlayer: function () { return activePlayer; }
+      _activePlayer: function () { return activePlayer; },
+      _ytReady: function () { return ytReady; },
+      _streamStatus: function () { return streamEndpointStatus; }
     };
+
+    logInfo('Musicoom booted. Debug via window.musicoom');
   }
 
   if (document.readyState === 'loading') {
